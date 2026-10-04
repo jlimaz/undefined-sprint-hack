@@ -207,7 +207,6 @@ The first three rows answered a different question on simulated data and are not
 | **Built by us and running live** | The Library and its file checks; the Laya service; the text the chat model answers from; the grounded chat agent; the terminal pipeline; a test suite for file checking, the chat context and the HTTP service |
 | **Built by us, run beforehand** | The converters that turn Panoradio IQ vectors and the sigidwiki catalogue into observations; the dataset builder and split; the evaluation script; the fine-tuning run that produced the checkpoint |
 | **Not ours** | The base Laya model and its training script (vendored, with our changes noted in the file header); the chat model; Ollama; the assistant-ui starter the dashboard began from |
-| **Assigned, not measured** | Centre frequency and modulation name of every Panoradio row; all fields of every sigidwiki row, which are drawn from catalogue entries. The data says so itself: all 774 test rows carry `"simulated": true`, and the 624 Panoradio rows also carry `"frequency_assigned": true` |
 | **Not built** | Reading a live SDR or a raw IQ file in the app; reading a spectrogram image; any anomaly detection beyond low confidence and rare answers |
 
 ## 9. Limits and the next step
