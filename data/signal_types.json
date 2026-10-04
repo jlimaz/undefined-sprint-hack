@@ -1,6 +1,0 @@
-{
-  "wifi": "20 to 80 MHz wide, centered near 2.4 GHz or 5 GHz, moderate amplitude",
-  "bluetooth": "about 1 MHz wide, centered near 2.4 GHz",
-  "radar": "a few MHz wide, centered near 2.7 to 3.1 GHz or near 9 GHz",
-  "jamming": "hundreds of MHz wide and much louder than a normal signal"
-}

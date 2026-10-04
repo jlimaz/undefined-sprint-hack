@@ -1,0 +1,11 @@
+{
+  "mode": {
+    "type": "choice",
+    "instructions": "Which signal type is this most likely?",
+    "criteria": {
+      "enemy": "Morse code (CW); amateur shortwave bands, 1.8 to 28 MHz; under 150 Hz wide; OOK",
+      "psk": "PSK31, PSK63 or QPSK31 keyboard mode; amateur shortwave bands, 1.8 to 28 MHz; 30 to 130 Hz wide; PSK or QPSK",
+      "rtty": "radioteletype, 45 baud with 170 Hz shift; amateur shortwave bands, 3.5 to 28 MHz; 200 to 270 Hz wide; FSK"
+    }
+  }
+}
