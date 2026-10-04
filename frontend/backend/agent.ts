@@ -24,7 +24,7 @@ type PipelineContext = { active: boolean; running: boolean; context?: string };
 
 const model = new ChatOllama({
   // Must be the model the pipeline keeps loaded; a small GPU cannot hold two.
-  model: process.env.OLLAMA_MODEL || "qwen3:4b-instruct",
+  model: process.env.OLLAMA_MODEL || "deepseek-r1:14b",
   baseUrl: process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
   streaming: true,
   // Thinking models reason by default. Keep the reply in the visible message.
