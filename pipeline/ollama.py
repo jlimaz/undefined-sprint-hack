@@ -8,13 +8,15 @@ import urllib.error
 import urllib.request
 
 HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = os.environ.get("OLLAMA_MODEL", "deepseek-r1:14b")
+MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:4b-instruct")
 
 _SYSTEM = (
     "Respond directly. Do not reason, and do not include think tags. "
-    "Write a plain-language summary for an operator. "
-    "Name every signal classified as jamming, and state how many are not jamming."
+    "Answer the operator's question in plain language, using only the "
+    "classification results provided. Do not revise or recount them."
 )
+DEFAULT_QUESTION = "Which observations are Morse code, and how many are not?"
+_UNLOAD_TIMEOUT_S = 10.0
 _THINK_BLOCK = re.compile(r"<think>[\s\S]*?</think>")
 _warmed = False
 _warmup_s = 0.0
@@ -38,20 +40,38 @@ def warmup() -> None:
     _warmup_s = time.perf_counter() - started
 
 
+def unload() -> None:
+    """Evict the model so its GPU memory is free, and wait until it is gone."""
+    global _warmed
+    _post("/api/generate", {"model": MODEL, "keep_alive": 0})
+    _warmed = False
+    deadline = time.perf_counter() + _UNLOAD_TIMEOUT_S
+    while time.perf_counter() < deadline:
+        loaded = _get("/api/ps").get("models") or []
+        if all(entry.get("name") != MODEL for entry in loaded):
+            return
+        time.sleep(0.2)
+
+
 def warmup_seconds() -> float:
     """Seconds spent on the warmup that actually loaded the model."""
     return _warmup_s
 
 
-def judge(items: list[dict]) -> str:
-    """Summarize which signals are jamming, and how many are not."""
-    lines = [f"- {item['id']}: {item['signal_type']}" for item in items]
+def judge(items: list[dict], modes: list[str], question: str = DEFAULT_QUESTION) -> str:
+    """Answer one question about how Laya classified the observations."""
+    ids = {mode: [] for mode in modes}
+    for item in items:
+        ids.setdefault(item["mode"], []).append(str(item["id"]))
+    lines = [
+        f"- {mode} ({len(members)}): {', '.join(members) or 'none'}"
+        for mode, members in ids.items()
+    ]
     prompt = (
-        "Each line is a signal and the type Laya assigned.\n"
+        f"Laya classified {len(items)} observations. "
+        "Signal type (count): observation ids\n"
         + "\n".join(lines)
-        + "\nWrite one short summary for an operator. "
-        "Name every signal classified as jamming. "
-        "State how many are not jamming. Do not revise or recount."
+        + f"\n\nQuestion: {question}"
     )
     payload = _post(
         "/api/chat",
@@ -64,7 +84,7 @@ def judge(items: list[dict]) -> str:
                 {"role": "system", "content": _SYSTEM},
                 {"role": "user", "content": prompt},
             ],
-            "options": {"temperature": 0.1, "num_predict": 256},
+            "options": {"temperature": 0.1, "num_predict": 512},
         },
     )
     message = payload.get("message") or {}
@@ -77,18 +97,25 @@ def judge(items: list[dict]) -> str:
     return text
 
 
+def _get(path: str) -> dict:
+    """GET a JSON document from the local Ollama server."""
+    return _send(urllib.request.Request(f"{HOST.rstrip('/')}/{path.lstrip('/')}"))
+
+
 def _post(path: str, payload: dict) -> dict:
     """POST JSON to the local Ollama server and return the decoded body."""
-    request = urllib.request.Request(
-        f"{HOST.rstrip('/')}/{path.lstrip('/')}",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
+    return _send(
+        urllib.request.Request(
+            f"{HOST.rstrip('/')}/{path.lstrip('/')}",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
     )
+
+
+def _send(request: urllib.request.Request) -> dict:
     try:
         with urllib.request.urlopen(request) as response:
             return json.load(response)
     except urllib.error.URLError as exc:
         raise SystemExit(f"Ollama is not reachable at {HOST}: {exc.reason}") from exc
-
-
-warmup()

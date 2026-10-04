@@ -3,49 +3,58 @@ import sys
 import time
 from pathlib import Path
 
-from pipeline.laya import classify, load_agent
-from pipeline.ollama import judge, warmup, warmup_seconds
+from pipeline.laya import classify, load_agent, release
+from pipeline.ollama import DEFAULT_QUESTION, judge, unload, warmup, warmup_seconds
 
 ROOT = Path(__file__).resolve().parent.parent
+MAX_OBSERVATIONS = 100
 
 
 def main():
-    warmup()
-    signals = json.loads((ROOT / "data" / "signals.json").read_text())
-    criteria = json.loads((ROOT / "data" / "signal_types.json").read_text())
-    timings = [("ollama warmup", warmup_seconds())]
+    question = " ".join(sys.argv[1:]) or DEFAULT_QUESTION
+    # Laya and the Ollama model do not both fit on a small GPU, so they take turns.
+    started = time.perf_counter()
+    unload()
+    timings = [("ollama unload", time.perf_counter() - started)]
+    lines = (ROOT / "data" / "test_observations.jsonl").read_text().splitlines()
+    observations = [json.loads(line) for line in lines if line.strip()][:MAX_OBSERVATIONS]
+    questions = json.loads((ROOT / "data" / "questions_20.json").read_text())
     started = time.perf_counter()
     agent = load_agent()
     timings.append(("laya load", time.perf_counter() - started))
+    started = time.perf_counter()
+    answers = classify(agent, observations, questions)
+    timings.append((f"laya classify [{len(observations)}]", time.perf_counter() - started))
+    release(agent)
+    warmup()
+    timings.append(("ollama warmup", warmup_seconds()))
     classified = []
     correct = 0
-    for signal in signals:
-        started = time.perf_counter()
-        signal_type, confidence = classify(agent, signal, criteria)
-        timings.append((f"laya classify [{signal['id']}]", time.perf_counter() - started))
-        if signal_type == signal["expected"]:
+    for observation, answer in zip(observations, answers):
+        mode, confidence = answer["mode"]
+        if mode == observation["label_mode"]:
             correct += 1
         classified.append(
             {
-                "id": signal["id"],
-                "frequency_mhz": signal["frequency_mhz"],
-                "bandwidth_mhz": signal["bandwidth_mhz"],
-                "amplitude_dbm": signal["amplitude_dbm"],
-                "signal_type": signal_type,
+                "id": observation["id"],
+                "center_frequency_hz": observation["center_frequency_hz"],
+                "bandwidth_hz": observation["bandwidth_hz"],
+                "modulation": observation["modulation"],
+                "mode": mode,
                 "confidence": confidence,
             }
         )
     started = time.perf_counter()
-    judgment = judge(classified)
+    judgment = judge(classified, list(questions["mode"]["criteria"]), question)
     timings.append(("ollama judge", time.perf_counter() - started))
-    jamming = [signal["id"] for signal in signals if signal["expected"] == "jamming"]
+    morse = sum(observation["label_mode"] == "morse" for observation in observations)
     for item in classified:
         print(json.dumps(item))
     print(f"\033[32m{json.dumps({'judgment': judgment})}\033[0m")
     print(
-        f"laya {correct}/{len(signals)} "
-        f"expected jamming: {', '.join(jamming)} "
-        f"expected not jamming: {len(signals) - len(jamming)}"
+        f"laya {correct}/{len(observations)} "
+        f"expected morse: {morse} "
+        f"expected not morse: {len(observations) - morse}"
     )
     for step, seconds in timings:
         print(f"{step}: {seconds:.2f}s", file=sys.stderr)
