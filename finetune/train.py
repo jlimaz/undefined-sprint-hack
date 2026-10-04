@@ -237,6 +237,30 @@ def fit_temperature(samples):
     return float(torch.clamp(log_temperature.exp(), 0.1, 10.0).item())
 
 
+def disable_mps_head_dropout(model, device):
+    """Masked attention with dropout is non-finite on MPS.
+
+    The encoder already trains with attention dropout 0. The decision head does
+    not: TransformerEncoderLayer defaults to 0.1, and PyTorch's MPS kernels
+    either reject that dropout or return NaN once a padding mask is applied.
+    CUDA and CPU keep the original dropout.
+    """
+    if getattr(device, "type", None) != "mps" or model.head is None:
+        return
+    changed = False
+    for module in model.head.modules():
+        if isinstance(module, torch.nn.Dropout) and module.p != 0:
+            module.p = 0.0
+            changed = True
+        # MultiheadAttention stores its dropout as a float and feeds it to SDPA.
+        attn_dropout = getattr(module, "dropout", None)
+        if isinstance(attn_dropout, float) and attn_dropout != 0.0:
+            module.dropout = 0.0
+            changed = True
+    if changed:
+        print("Decision-head dropout disabled on MPS; masked attention dropout is non-finite there.")
+
+
 def save_checkpoint(model, tokenizer, cfg, output_dir, epoch, final=False):
     path = Path(output_dir) if final else Path(output_dir) / "checkpoint_latest"
     path.mkdir(parents=True, exist_ok=True)
@@ -271,6 +295,7 @@ def train(args, model_dir, items_path, device):
         )
         model.head_checkpointing = True
     model.to(device).train()
+    disable_mps_head_dropout(model, device)
 
     all_items = torch.load(items_path, map_location="cpu", weights_only=False)
     order = list(range(len(all_items)))
@@ -336,10 +361,22 @@ def train(args, model_dir, items_path, device):
             loss_ce = -(
                 target * torch.log_softmax(logits.masked_fill(~mask, -1e4), -1)
             ).sum(-1).mean()
-            loss = (loss_rl + loss_ce + 0.0 * activation.sum()) / args.grad_accum
-            loss.backward()
+            # 0 * NaN is NaN, so a non-finite act head would poison Adam even
+            # though this term has no weight. Keep it only when it is finite;
+            # a real zero still attaches the head so weight decay still runs.
+            loss_main = loss_rl + loss_ce
+            act_term = activation.sum()
+            if bool(torch.isfinite(act_term)):
+                loss_main = loss_main + act_term * 0
+            loss = loss_main / args.grad_accum
 
             n_batches += 1
+            if not bool(torch.isfinite(loss)):
+                optimizer.zero_grad(set_to_none=True)
+                print(f"epoch {epoch + 1}/{args.epochs}, step {n_batches}, non-finite loss; skipped the update")
+                continue
+            loss.backward()
+
             if n_batches % args.grad_accum == 0 or start + args.micro_batch >= len(train_items):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
