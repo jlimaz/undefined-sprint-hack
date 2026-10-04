@@ -18,14 +18,21 @@ def _low_confidence(name, rows):
     return sorted(low, key=lambda row: row["answers"][name][1])
 
 
-def build_context(names, questions, rows, total):
+def build_context(names, questions, rows, total, offset=0):
     """Describe the classification so a small model can answer without counting."""
+    end = offset + len(rows)
     lines = [
         f"Laya classified {len(rows)} observations from {names['data']}, "
         f"using the questions in {names['knowledge']}."
     ]
-    if total > len(rows):
+    if offset == 0 and total > len(rows):
         lines.append(f"Only the first {len(rows)} of {total} rows in the file were classified.")
+        lines.append(f"{total - len(rows)} rows have not been classified.")
+    elif offset > 0:
+        lines.append(f"This result covers rows {offset + 1}\u2013{end} of {total}.")
+        lines.append(f"Rows 1\u2013{offset} are not part of this result.")
+        if end < total:
+            lines.append(f"{total - end} rows after this result have not been classified.")
     for name, question in questions.items():
         lines += ["", f"Question {name!r}: {question['instructions']}", "What each answer means:"]
         lines += [f"- {option}: {description}" for option, description in question["criteria"].items()]
@@ -58,13 +65,14 @@ def build_context(names, questions, rows, total):
     return "\n".join(lines)
 
 
-def build_summary(names, questions, rows, total, seconds):
+def build_summary(names, questions, rows, total, seconds, offset=0):
     """The short account of a run that the dashboard shows."""
     return {
         "knowledge_name": names["knowledge"],
         "data_name": names["data"],
         "observations": len(rows),
         "total_rows": total,
+        "row_offset": offset,
         "questions": [
             {
                 "name": name,

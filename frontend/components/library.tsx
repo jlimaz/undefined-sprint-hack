@@ -2,14 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { useAnalysis, type AnalysisSummary } from "@/hooks/use-analysis";
-import {
-  inspectFile,
-  MAX_FILE_BYTES,
-  type FileCheck,
-  type LayaRole,
-} from "@/lib/laya-files";
+import { inspectFile, MAX_FILE_BYTES, type FileCheck, type LayaRole } from "@/lib/laya-files";
 import { cn } from "@/lib/utils";
 import {
+  CheckIcon,
   FileJsonIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
@@ -43,9 +39,9 @@ const LABELS: Record<LibraryId, string> = {
   data: "Data",
 };
 
-const NO_SELECTION: Record<LibraryId, string | null> = {
-  knowledge: null,
-  data: null,
+const NO_SELECTION: Record<LibraryId, string[]> = {
+  knowledge: [],
+  data: [],
 };
 
 function formatSize(bytes: number) {
@@ -58,14 +54,8 @@ function formatAdded(timestamp: number) {
   const date = new Date(timestamp);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfDate = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-  const days = Math.round(
-    (startOfToday.getTime() - startOfDate.getTime()) / 86_400_000,
-  );
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const days = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86_400_000);
   if (days <= 0) return "Today";
   if (days === 1) return "Yesterday";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -137,18 +127,9 @@ function FileMark({ kind }: { kind: Kind }) {
     other: "bg-muted text-muted-foreground",
   }[kind];
   const Icon =
-    kind === "json"
-      ? FileJsonIcon
-      : kind === "data"
-        ? FileSpreadsheetIcon
-        : FileTextIcon;
+    kind === "json" ? FileJsonIcon : kind === "data" ? FileSpreadsheetIcon : FileTextIcon;
   return (
-    <span
-      className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-md",
-        tone,
-      )}
-    >
+    <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", tone)}>
       <Icon className="size-3.5" />
     </span>
   );
@@ -158,13 +139,11 @@ export function Library() {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [library, setLibrary] = useState<LibraryId>("knowledge");
-  const [filesByLibrary, setFilesByLibrary] = useState<
-    Record<LibraryId, LibraryFile[]>
-  >({
+  const [filesByLibrary, setFilesByLibrary] = useState<Record<LibraryId, LibraryFile[]>>({
     knowledge: [],
     data: [],
   });
-  // One file per library takes part in a run.
+  // Every selected file in a library takes part in a run, in this order.
   const [selected, setSelected] = useState(NO_SELECTION);
   // The files the active classification came from, while they are still listed.
   const [source, setSource] = useState(NO_SELECTION);
@@ -178,12 +157,15 @@ export function Library() {
   }, [refresh]);
 
   const chosen = (id: LibraryId) => {
-    const file = filesByLibrary[id].find((item) => item.id === selected[id]);
-    return file && statusOf(file, id).usable ? file : undefined;
+    const byId = new Map(filesByLibrary[id].map((item) => [item.id, item]));
+    return selected[id].flatMap((fileId) => {
+      const file = byId.get(fileId);
+      return file && statusOf(file, id).usable ? [file] : [];
+    });
   };
-  const knowledgeFile = chosen("knowledge");
-  const dataFile = chosen("data");
-  const missing = LIBRARIES.filter((item) => !chosen(item.id)).map((item) =>
+  const knowledgeFiles = chosen("knowledge");
+  const dataFiles = chosen("data");
+  const missing = LIBRARIES.filter((item) => chosen(item.id).length === 0).map((item) =>
     item.label.toLowerCase(),
   );
 
@@ -203,6 +185,7 @@ export function Library() {
       ...current,
       [target]: [...next, ...current[target]],
     }));
+    const added = next.map((item) => item.id);
     for (const item of next) {
       void inspect(item.file).then((check) => {
         setFilesByLibrary((current) => ({
@@ -211,11 +194,17 @@ export function Library() {
             file.id === item.id ? { ...file, check } : file,
           ),
         }));
-        // The first usable file in a library is picked for the operator.
+        // Each usable file is selected, in the order it was added.
         if (check.ok && check.role === target) {
-          setSelected((current) =>
-            current[target] ? current : { ...current, [target]: item.id },
-          );
+          setSelected((current) => {
+            const ids = current[target].includes(item.id)
+              ? current[target]
+              : [...current[target], item.id];
+            const batch = new Set(added);
+            const previous = ids.filter((id) => !batch.has(id));
+            const incoming = added.filter((id) => ids.includes(id));
+            return { ...current, [target]: [...previous, ...incoming] };
+          });
         }
       });
     }
@@ -230,10 +219,11 @@ export function Library() {
   }, [files, query]);
 
   const toggle = (id: string) => {
-    setSelected((current) => ({
-      ...current,
-      [library]: current[library] === id ? null : id,
-    }));
+    setSelected((current) => {
+      const ids = current[library];
+      const next = ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
+      return { ...current, [library]: next };
+    });
   };
 
   const remove = (id: string) => {
@@ -241,20 +231,28 @@ export function Library() {
       ...current,
       [library]: current[library].filter((file) => file.id !== id),
     }));
-    setSelected((current) =>
-      current[library] === id ? { ...current, [library]: null } : current,
-    );
+    setSelected((current) => ({
+      ...current,
+      [library]: current[library].filter((item) => item !== id),
+    }));
     // The chat should not keep answering from a file the operator took away.
-    if (source[library] === id) {
+    if (source[library].includes(id)) {
       setSource(NO_SELECTION);
       void clear();
     }
   };
 
   const onRun = async () => {
-    if (!knowledgeFile || !dataFile) return;
-    const next = { knowledge: knowledgeFile.id, data: dataFile.id };
-    if (await run(knowledgeFile.file, dataFile.file)) setSource(next);
+    if (knowledgeFiles.length === 0 || dataFiles.length === 0) return;
+    const next = {
+      knowledge: knowledgeFiles.map((file) => file.id),
+      data: dataFiles.map((file) => file.id),
+    };
+    const started = await run(
+      knowledgeFiles.map((file) => file.file),
+      dataFiles.map((file) => file.file),
+    );
+    if (started) setSource(next);
   };
 
   const onClear = () => {
@@ -300,9 +298,7 @@ export function Library() {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <h2 className="shrink-0 px-1 text-base font-semibold tracking-tight">
-        Library
-      </h2>
+      <h2 className="shrink-0 px-1 text-base font-semibold tracking-tight">Library</h2>
 
       <label className="relative block shrink-0">
         <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
@@ -333,11 +329,10 @@ export function Library() {
               )}
             >
               {item.label}
-              {chosen(item.id) && (
-                <span
-                  aria-hidden
-                  className="ms-1.5 inline-block size-1.5 rounded-full bg-emerald-500 align-middle"
-                />
+              {chosen(item.id).length > 0 && (
+                <span className="ms-1.5 text-xs tabular-nums text-emerald-500">
+                  {chosen(item.id).length}
+                </span>
               )}
             </button>
           );
@@ -351,117 +346,113 @@ export function Library() {
         )}
         onClick={files.length === 0 ? openPicker : undefined}
       >
-      <ul
-        role="listbox"
-        aria-label={`${LIBRARIES.find((item) => item.id === library)?.label} files`}
-        className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 py-0.5"
-      >
-        {visible.length === 0 ? (
-          <li className="flex flex-1 items-center justify-center px-2">
-            <span
-              className={cn(
-                "text-muted-foreground text-sm transition-all duration-300",
-                files.length === 0 &&
-                  "group-hover/empty:text-foreground/80 group-hover/empty:-translate-y-1",
-              )}
-            >
-              {files.length === 0 ? "No files yet" : "No matching files"}
-            </span>
-          </li>
-        ) : (
-          visible.map((item) => {
-            const status = statusOf(item, library);
-            const isSelected = status.usable && selected[library] === item.id;
-            return (
-              <li key={item.id} className="group relative">
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  aria-disabled={!status.usable}
-                  title={
-                    status.problem
-                      ? `${item.name}: ${status.problem}`
-                      : item.name
-                  }
-                  onClick={status.usable ? () => toggle(item.id) : undefined}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg border px-2 py-2 text-left",
-                    isSelected
-                      ? "border-blue-500/70 bg-blue-500/15"
-                      : "border-transparent hover:bg-muted/50",
-                    !status.usable && "cursor-default",
-                  )}
-                >
-                  <FileMark kind={kindOf(item)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">{item.name}</span>
-                    {status.problem ? (
-                      <span className="text-destructive block truncate text-xs dark:text-red-200">
-                        {status.problem}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground block truncate text-xs">
-                        {status.text} · {formatSize(item.size)} ·{" "}
-                        {formatAdded(item.addedAt)}
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    aria-hidden
+        <ul
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={`${LIBRARIES.find((item) => item.id === library)?.label} files`}
+          className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 py-0.5"
+        >
+          {visible.length === 0 ? (
+            <li className="flex flex-1 items-center justify-center px-2">
+              <span
+                className={cn(
+                  "text-muted-foreground text-sm transition-all duration-300",
+                  files.length === 0 &&
+                    "group-hover/empty:text-foreground/80 group-hover/empty:-translate-y-1",
+                )}
+              >
+                {files.length === 0 ? "No files yet" : "No matching files"}
+              </span>
+            </li>
+          ) : (
+            visible.map((item) => {
+              const status = statusOf(item, library);
+              const isSelected = status.usable && selected[library].includes(item.id);
+              return (
+                <li key={item.id} className="group relative">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    aria-disabled={!status.usable}
+                    title={status.problem ? `${item.name}: ${status.problem}` : item.name}
+                    onClick={status.usable ? () => toggle(item.id) : undefined}
                     className={cn(
-                      "size-4 shrink-0 rounded-full border",
+                      "flex w-full items-center gap-2.5 rounded-lg border px-2 py-2 text-left",
                       isSelected
-                        ? "border-blue-500 bg-blue-500 shadow-[inset_0_0_0_3px_var(--color-sidebar)]"
-                        : "border-muted-foreground/40",
-                      !status.usable && "invisible",
+                        ? "border-blue-500/70 bg-blue-500/15"
+                        : "border-transparent hover:bg-muted/50",
+                      !status.usable && "cursor-default",
                     )}
-                  />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Remove ${item.name}`}
-                  onClick={() => remove(item.id)}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-8 flex size-5 -translate-y-1/2 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                >
-                  <XIcon className="size-3.5" />
-                </button>
-              </li>
-            );
-          })
-        )}
-      </ul>
-
-      <div
-        className={cn(
-          "text-muted-foreground flex shrink-0 items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm transition-colors duration-300",
-          dragOver
-            ? "border-foreground/50 bg-muted/30"
-            : "border-foreground/25",
-          files.length === 0 &&
-            "group-hover/empty:border-foreground/45 group-hover/empty:bg-muted/20",
-        )}
-      >
-        <FileTextIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-transform duration-300",
-            files.length === 0 && "group-hover/empty:-translate-y-0.5",
+                  >
+                    <FileMark kind={kindOf(item)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{item.name}</span>
+                      {status.problem ? (
+                        <span className="text-destructive block truncate text-xs dark:text-red-200">
+                          {status.problem}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {status.text} · {formatSize(item.size)} · {formatAdded(item.addedAt)}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
+                        isSelected
+                          ? "border-blue-500 bg-blue-500 text-white"
+                          : "border-muted-foreground/40",
+                        !status.usable && "invisible",
+                      )}
+                    >
+                      {isSelected && <CheckIcon className="size-3" />}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${item.name}`}
+                    onClick={() => remove(item.id)}
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-8 flex size-5 -translate-y-1/2 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  >
+                    <XIcon className="size-3.5" />
+                  </button>
+                </li>
+              );
+            })
           )}
-        />
-        <p>
-          Drop files anywhere, or{" "}
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              openPicker();
-            }}
-            className="text-blue-400 underline-offset-2 hover:underline"
-          >
-            browse
-          </button>
-        </p>
-      </div>
+        </ul>
+
+        <div
+          className={cn(
+            "text-muted-foreground flex shrink-0 items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm transition-colors duration-300",
+            dragOver ? "border-foreground/50 bg-muted/30" : "border-foreground/25",
+            files.length === 0 &&
+              "group-hover/empty:border-foreground/45 group-hover/empty:bg-muted/20",
+          )}
+        >
+          <FileTextIcon
+            className={cn(
+              "size-3.5 shrink-0 transition-transform duration-300",
+              files.length === 0 && "group-hover/empty:-translate-y-0.5",
+            )}
+          />
+          <p>
+            Drop files anywhere, or{" "}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                openPicker();
+              }}
+              className="text-blue-400 underline-offset-2 hover:underline"
+            >
+              browse
+            </button>
+          </p>
+        </div>
       </div>
 
       <div className="flex shrink-0 flex-col gap-2">
@@ -470,45 +461,39 @@ export function Library() {
             role="alert"
             className="border-destructive bg-destructive/10 text-destructive dark:bg-destructive/5 rounded-md border p-3 text-sm dark:text-red-200"
           >
-            {error.field && (
-              <span className="font-medium">{LABELS[error.field]} file: </span>
-            )}
+            {error.field && <span className="font-medium">{LABELS[error.field]} file: </span>}
             {error.message}
           </p>
         )}
         {running ? (
-          <p
-            role="status"
-            className="text-muted-foreground px-1 text-xs"
-          >
+          <p role="status" className="text-muted-foreground px-1 text-xs">
             Laya has the GPU, so chat is paused. This can take a minute.
           </p>
         ) : (
           summary && (
             <div className="flex items-start gap-2 px-1 text-xs">
-              <span
-                aria-hidden
-                className="mt-1 size-1.5 shrink-0 rounded-full bg-emerald-500"
-              />
+              <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-emerald-500" />
               <p className="text-muted-foreground min-w-0 flex-1">
-                <span className="text-foreground block">
-                  Active · {describeSummary(summary)}
-                </span>
+                <span className="text-foreground block">Active · {describeSummary(summary)}</span>
                 <span
                   className="block truncate"
                   title={`${summary.knowledge_name} + ${summary.data_name}`}
                 >
                   {summary.knowledge_name} + {summary.data_name}
                 </span>
-                {summary.total_rows > summary.observations && (
+                {summary.row_offset > 0 ? (
                   <span className="block">
-                    First {summary.observations} of {summary.total_rows} rows
+                    {`Rows ${summary.row_offset + 1}–${summary.row_offset + summary.observations} of ${summary.total_rows}`}
                   </span>
+                ) : (
+                  summary.total_rows > summary.observations && (
+                    <span className="block">
+                      First {summary.observations} of {summary.total_rows} rows
+                    </span>
+                  )
                 )}
                 {summary.low_confidence > 0 && (
-                  <span className="block">
-                    {summary.low_confidence} low confidence
-                  </span>
+                  <span className="block">{summary.low_confidence} low confidence</span>
                 )}
               </p>
               <button

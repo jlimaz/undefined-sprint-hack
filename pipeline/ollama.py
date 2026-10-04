@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 
 HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = os.environ.get("OLLAMA_MODEL", "deepseek-r1:14b")
+MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
 _SYSTEM = (
     "Respond directly. Do not reason, and do not include think tags. "

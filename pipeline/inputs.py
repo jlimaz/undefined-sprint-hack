@@ -1,4 +1,4 @@
-"""Parse and check the two uploaded files before Laya sees them."""
+"""Parse and check the uploaded files before Laya sees them."""
 
 import json
 
@@ -40,8 +40,8 @@ def _looks_like_questions(value):
     )
 
 
-def parse_knowledge(text):
-    """Return the Laya questions in an uploaded knowledge file."""
+def _load_questions(text, partial):
+    """Read one knowledge file. A partial file may omit type and instructions."""
     if not text.strip():
         raise InputError("knowledge", "The file is empty.")
     try:
@@ -65,24 +65,91 @@ def parse_knowledge(text):
     if not questions:
         raise InputError("knowledge", "The file has no questions.")
     for name, question in questions.items():
-        if not isinstance(question, dict):
-            raise InputError("knowledge", f"Question {name!r} must be an object, got {_kind(question)}.")
-        if question.get("type") != "choice":
-            raise InputError("knowledge", f'Question {name!r} must have type "choice".')
-        instructions = question.get("instructions")
-        if not isinstance(instructions, str) or not instructions.strip():
-            raise InputError("knowledge", f"Question {name!r} needs instructions, as text.")
-        criteria = question.get("criteria")
-        if not isinstance(criteria, dict) or len(criteria) < 2:
-            raise InputError("knowledge", f"Question {name!r} needs criteria with at least two answers.")
-        for option, description in criteria.items():
-            if not isinstance(description, str):
-                raise InputError(
-                    "knowledge",
-                    f"Question {name!r}: the description of {option!r} must be text, "
-                    f"got {_kind(description)}.",
-                )
+        _check_question(name, question, partial)
     return questions
+
+
+def _check_question(name, question, partial):
+    if not isinstance(question, dict):
+        raise InputError("knowledge", f"Question {name!r} must be an object, got {_kind(question)}.")
+    criteria = question.get("criteria")
+    if not isinstance(criteria, dict) or (not partial and len(criteria) < 2):
+        raise InputError("knowledge", f"Question {name!r} needs criteria with at least two answers.")
+    for option, description in criteria.items():
+        if not isinstance(description, str):
+            raise InputError(
+                "knowledge",
+                f"Question {name!r}: the description of {option!r} must be text, "
+                f"got {_kind(description)}.",
+            )
+    provides = "type" in question or "instructions" in question
+    if partial and not provides:
+        return
+    if question.get("type") != "choice":
+        raise InputError("knowledge", f'Question {name!r} must have type "choice".')
+    instructions = question.get("instructions")
+    if not isinstance(instructions, str) or not instructions.strip():
+        raise InputError("knowledge", f"Question {name!r} needs instructions, as text.")
+
+
+def parse_knowledge(text):
+    """Return the Laya questions in one complete knowledge file."""
+    return _load_questions(text, partial=False)
+
+
+def merge_knowledge(parts):
+    """Merge knowledge files in selection order.
+
+    One file supplies type and instructions for each question. The others add
+    criteria under the same question name. parts is a list of (name, text).
+    """
+    if not parts:
+        raise InputError("knowledge", "The file has no questions.")
+    multiple = len(parts) > 1
+    merged = {}
+    instruction_file = {}
+    answer_file = {}
+    question_files = {}
+    for filename, text in parts:
+        try:
+            questions = _load_questions(text, partial=True)
+        except InputError as exc:
+            if multiple:
+                raise InputError("knowledge", f"{filename}: {exc}") from exc
+            raise
+        for name, question in questions.items():
+            question_files.setdefault(name, []).append(filename)
+            slot = merged.setdefault(name, {"criteria": {}})
+            if "type" in question or "instructions" in question:
+                if name in instruction_file:
+                    raise InputError(
+                        "knowledge",
+                        f"Question {name!r} has type and instructions in "
+                        f"{instruction_file[name]} and {filename}. "
+                        "Only one knowledge file can include them.",
+                    )
+                instruction_file[name] = filename
+                slot["type"] = question.get("type")
+                slot["instructions"] = question.get("instructions")
+            for option, description in question["criteria"].items():
+                if option in slot["criteria"]:
+                    raise InputError(
+                        "knowledge",
+                        f"{filename}: Question {name!r}: answer {option!r} is already defined in "
+                        f"{answer_file[name, option]}.",
+                    )
+                slot["criteria"][option] = description
+                answer_file[name, option] = filename
+    for name, question in merged.items():
+        if name not in instruction_file:
+            files = ", ".join(question_files[name])
+            raise InputError(
+                "knowledge",
+                f"Question {name!r} in {files} needs instructions, as text.",
+            )
+        if len(question["criteria"]) < 2:
+            raise InputError("knowledge", f"Question {name!r} needs criteria with at least two answers.")
+    return merged
 
 
 def _rows(text):
@@ -122,24 +189,49 @@ def _rows(text):
     raise InputError("data", f"Expected a list of observations, got {_kind(value)}.")
 
 
-def parse_observations(text):
-    """Return the observations Laya will classify, and how many rows the file had."""
-    rows = _rows(text)
-    if not rows:
+def _observation(row, label, default_id):
+    if not isinstance(row, dict):
+        raise InputError("data", f"{label} must be an object, got {_kind(row)}.")
+    for field in ("center_frequency_hz", "bandwidth_hz"):
+        if field not in row:
+            raise InputError("data", f"{label} is missing {field}.")
+        if not _is_number(row[field]) or row[field] < 0:
+            raise InputError("data", f"{label}: {field} must be a number of Hz, zero or more.")
+    if "modulation" not in row:
+        raise InputError("data", f"{label} is missing modulation.")
+    if not isinstance(row["modulation"], str):
+        raise InputError("data", f"{label}: modulation must be text, got {_kind(row['modulation'])}.")
+    return {**row, "id": row.get("id", default_id)}
+
+
+def combine_observations(parts, limit=MAX_OBSERVATIONS, offset=0):
+    """Concatenate data files, then keep one slice of rows.
+
+    parts is a list of (name, text). Each file is a JSON list or one object per
+    line, in the same shape as a single data file. A row keeps its id when the
+    file sets one. The default slice is the first MAX_OBSERVATIONS rows. Rows
+    outside the slice are not checked.
+    """
+    if not parts:
+        raise InputError("data", "The file has no observations.")
+    multiple = len(parts) > 1
+    combined = []
+    for filename, text in parts:
+        try:
+            rows = _rows(text)
+        except InputError as exc:
+            message = f"{filename}: {exc}" if multiple else str(exc)
+            raise InputError("data", message) from exc
+        combined.extend((filename, index, row) for index, row in enumerate(rows))
+    if not combined:
         raise InputError("data", "The file has no observations.")
     observations = []
-    for index, row in enumerate(rows[:MAX_OBSERVATIONS]):
-        label = f"Row {index + 1}"
-        if not isinstance(row, dict):
-            raise InputError("data", f"{label} must be an object, got {_kind(row)}.")
-        for field in ("center_frequency_hz", "bandwidth_hz"):
-            if field not in row:
-                raise InputError("data", f"{label} is missing {field}.")
-            if not _is_number(row[field]) or row[field] < 0:
-                raise InputError("data", f"{label}: {field} must be a number of Hz, zero or more.")
-        if "modulation" not in row:
-            raise InputError("data", f"{label} is missing modulation.")
-        if not isinstance(row["modulation"], str):
-            raise InputError("data", f"{label}: modulation must be text, got {_kind(row['modulation'])}.")
-        observations.append({**row, "id": row.get("id", index)})
-    return observations, len(rows)
+    for position, (filename, index, row) in enumerate(combined[offset:offset + limit]):
+        label = f"{filename}, row {index + 1}" if multiple else f"Row {index + 1}"
+        observations.append(_observation(row, label, offset + position))
+    return observations, len(combined)
+
+
+def parse_observations(text):
+    """Return the observations Laya will classify, and how many rows the file had."""
+    return combine_observations([("", text)])

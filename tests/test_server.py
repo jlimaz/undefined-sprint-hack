@@ -1,10 +1,13 @@
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from pipeline import analysis, server
 from pipeline.inputs import InputError
+
+ROOT = Path(__file__).resolve().parents[1]
 
 QUESTIONS = {
     "mode": {
@@ -47,7 +50,12 @@ def body(knowledge=None, data=None):
 def client(monkeypatch):
     monkeypatch.setattr(analysis, "run", fake_run)
     monkeypatch.setattr(server, "_active", None)
+    monkeypatch.setattr(server, "_source", None)
     return TestClient(server.app)
+
+
+def many_rows(count):
+    return json.dumps([{**ROWS[0], "id": index} for index in range(count)])
 
 
 def test_health(client):
@@ -71,10 +79,124 @@ def test_classify_returns_a_summary_and_activates_the_context(client):
     assert "- morse (1): 0" in context["context"]
 
 
+def test_classify_accepts_several_files(client):
+    questions = json.loads((ROOT / "data" / "questions_20.json").read_text())
+    response = client.post(
+        "/classify",
+        json={
+            "knowledge": [
+                {"name": "teste1.json", "text": (ROOT / "data" / "teste1.json").read_text()},
+                {"name": "teste2.json", "text": (ROOT / "data" / "teste2.json").read_text()},
+            ],
+            "data": [
+                {"name": "a.json", "text": json.dumps([ROWS[0]])},
+                {"name": "b.json", "text": json.dumps([ROWS[1]])},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["knowledge_name"] == "teste1.json, teste2.json"
+    assert summary["data_name"] == "a.json, b.json"
+    assert summary["observations"] == 2
+    assert summary["questions"][0]["counts"] == {
+        option: 1 if option in ("morse", "other") else 0
+        for option in questions["mode"]["criteria"]
+    }
+
+
+def test_criteria_only_knowledge_is_a_400(client):
+    response = client.post(
+        "/classify",
+        json=body(knowledge=(ROOT / "data" / "teste2.json").read_text()),
+    )
+    assert response.status_code == 400
+    assert response.json()["field"] == "knowledge"
+    assert "instructions" in response.json()["error"]
+
+
 def test_clearing_the_context(client):
     client.post("/classify", json=body())
     assert client.delete("/context").json() == {"active": False, "running": False}
     assert client.get("/context").json()["active"] is False
+    refused = client.post("/reclassify", json={"count": 1})
+    assert refused.status_code == 400
+    assert "Library" in refused.json()["error"]
+
+
+def test_reclassify_remaining_replaces_the_window(client):
+    first = client.post("/classify", json=body(data=many_rows(105)))
+    assert first.status_code == 200
+    assert first.json()["summary"]["observations"] == 100
+    assert first.json()["summary"]["row_offset"] == 0
+
+    response = client.post("/reclassify", json={"remaining": True})
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["observations"] == 5
+    assert summary["row_offset"] == 100
+    context = client.get("/context").json()
+    assert context["summary"] == summary
+    assert "rows 101\u2013105 of 105" in context["context"]
+    assert "Rows 1\u2013100 are not part of this result." in context["context"]
+
+
+def test_reclassify_count_starts_from_the_first_row(client):
+    client.post("/classify", json=body(data=many_rows(10)))
+    response = client.post("/reclassify", json={"count": 3})
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["observations"] == 3
+    assert summary["row_offset"] == 0
+    assert "first 3 of 10" in client.get("/context").json()["context"]
+    assert "7 rows have not been classified." in client.get("/context").json()["context"]
+
+
+def test_reclassify_remaining_count_is_the_next_batch(client):
+    client.post("/classify", json=body(data=many_rows(105)))
+    response = client.post("/reclassify", json={"remaining": True, "count": 3})
+    summary = response.json()["summary"]
+    assert summary["row_offset"] == 100
+    assert summary["observations"] == 3
+
+
+def test_reclassify_clamps_a_count_past_the_end(client):
+    client.post("/classify", json=body())
+    response = client.post("/reclassify", json={"count": 50})
+    assert response.status_code == 200
+    assert response.json()["summary"]["observations"] == 2
+
+
+def test_reclassify_without_a_run_is_a_400(client):
+    response = client.post("/reclassify", json={"remaining": True})
+    assert response.status_code == 400
+    assert "Library" in response.json()["error"]
+
+
+def test_reclassify_remaining_when_nothing_is_left_is_a_400(client):
+    client.post("/classify", json=body())
+    response = client.post("/reclassify", json={"remaining": True})
+    assert response.status_code == 400
+    assert "already been classified" in response.json()["error"]
+    assert client.get("/context").json()["summary"]["observations"] == 2
+
+
+def test_reclassify_rejects_a_non_positive_count(client):
+    client.post("/classify", json=body())
+    response = client.post("/reclassify", json={"count": 0})
+    assert response.status_code == 400
+    assert "at least 1" in response.json()["error"]
+
+
+def test_reclassify_while_one_is_going_is_a_409(client):
+    client.post("/classify", json=body(data=many_rows(105)))
+    assert server._lock.acquire(blocking=False)
+    try:
+        response = client.post("/reclassify", json={"remaining": True})
+        assert response.status_code == 409
+        assert client.get("/context").json()["running"] is True
+    finally:
+        server._lock.release()
 
 
 def test_malformed_knowledge_is_a_400_on_that_field(client):
