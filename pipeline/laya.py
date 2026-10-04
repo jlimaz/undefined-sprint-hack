@@ -7,8 +7,7 @@ import laya
 import torch
 from laya.common import build_head
 
-CHECKPOINT = os.environ.get("LAYA_CHECKPOINT", "convaiinnovations/laya")
-
+from pipeline.checkpoint import resolve
 
 # The checkpoint is about 1.6 GiB of float32 weights, plus working memory.
 CUDA_FREE_BYTES_NEEDED = 2 * 1024**3
@@ -35,7 +34,7 @@ def load_agent():
             message=r"laya: this checkpoint ships invalid temperatures",
             category=RuntimeWarning,
         )
-        return laya.load(CHECKPOINT, device=pick_device())
+        return laya.load(resolve(), device=pick_device())
 
 
 def _scaled(hertz):

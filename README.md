@@ -4,7 +4,7 @@ A short local path: radio observations go to Laya, which assigns each one a sign
 
 ## Current state
 
-Laya is asked which of eight shortwave signal types an observation is, or `other`. The base checkpoint has to be fine-tuned before the pipeline output means anything: on an earlier, different question it scored at chance. The fine-tuning setup for the current question is ready but has not been run; see [finetune/README.md](finetune/README.md).
+Laya is asked which of eight shortwave signal types an observation is, or `other`. The base checkpoint has to be fine-tuned before the pipeline output means anything: on an earlier, different question it scored at chance. The pipeline therefore loads the fine-tuned checkpoint in `models/laya-rf-modes`, and stops with an error when that folder is missing; see [finetune/README.md](finetune/README.md) for how it is trained.
 
 ## Setup
 
@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ollama pull qwen3:4b-instruct
 ```
 
-Ollama must be running. The first pipeline run downloads the English Laya checkpoint (about 808 MB) from Hugging Face.
+Ollama must be running. The pipeline also needs the fine-tuned Laya checkpoint in `models/laya-rf-modes` (about 800 MB, not committed): train it with [finetune/README.md](finetune/README.md), or copy the folder from the machine that did.
 
 ## Run
 
@@ -67,7 +67,7 @@ The Ollama model is given the count and observation ids per signal type, and not
 
 | Setting | Where | Default |
 |---|---|---|
-| Laya checkpoint | `LAYA_CHECKPOINT` environment variable (a Hugging Face id or a local folder) | `convaiinnovations/laya` |
+| Laya checkpoint | `LAYA_CHECKPOINT` environment variable (a Hugging Face id or a local folder) | `models/laya-rf-modes` in this repository |
 | Ollama model | `OLLAMA_MODEL` environment variable | `qwen3:4b-instruct` |
 | Ollama address | `OLLAMA_HOST` environment variable | `http://127.0.0.1:11434` |
 | Observations per run | `MAX_OBSERVATIONS` in `pipeline/inputs.py` | 100 |
@@ -106,10 +106,10 @@ The tests cover file checking, the text built for the chat model and the HTTP se
 
 ## Fine-tuning
 
-Fine-tuning is separate from the pipeline and lives in `finetune/`. It produces a checkpoint folder; the pipeline loads it through `LAYA_CHECKPOINT`:
+Fine-tuning is separate from the pipeline and lives in `finetune/`. It produces the checkpoint folder `models/laya-rf-modes`, which the pipeline loads by default. To run another checkpoint, such as the base model, name it in `LAYA_CHECKPOINT`:
 
 ```bash
-LAYA_CHECKPOINT=models/laya-rf-modes python -m pipeline
+LAYA_CHECKPOINT=convaiinnovations/laya python -m pipeline
 ```
 
 The step-by-step guide is in [finetune/README.md](finetune/README.md).

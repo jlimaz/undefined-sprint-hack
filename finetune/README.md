@@ -96,10 +96,10 @@ python -m finetune.evaluate --checkpoint models/laya-rf-modes --test finetune/ou
 ### 6. Use the checkpoint
 
 ```bash
-LAYA_CHECKPOINT=models/laya-rf-modes python -m pipeline
+python -m pipeline
 ```
 
-To use it on another machine, copy the whole checkpoint folder (about 800 MB) and point `LAYA_CHECKPOINT` at it. `models/` is not committed.
+The pipeline and the dashboard load `models/laya-rf-modes` by default, and stop with an error when it is missing. To use it on another machine, copy the whole checkpoint folder (about 800 MB) to the same place, or put it elsewhere and point `LAYA_CHECKPOINT` at it. `models/` is not committed.
 
 ## If something goes wrong
 

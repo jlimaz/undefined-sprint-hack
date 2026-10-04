@@ -9,6 +9,8 @@ This is the [assistant-ui](https://github.com/assistant-ui/assistant-ui) starter
    .venv/bin/pip install -r requirements.txt
    ```
 
+   The Laya service loads the fine-tuned checkpoint from `models/laya-rf-modes` in the repository root. **Run Laya** fails with a message naming that path when the folder is missing.
+
 2. Copy the env template:
 
    ```bash
