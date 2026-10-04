@@ -358,9 +358,10 @@ const ThreadWelcome: FC = () => {
       <img
         src={eagleIcon.src}
         alt=""
+        draggable={false}
         width={Math.round(eagleIcon.width * 0.75)}
         height={Math.round(eagleIcon.height * 0.75)}
-        className="fade-in slide-in-from-bottom-1 animate-in fill-mode-both mb-4 h-12 w-auto self-start duration-200"
+        className="pointer-events-none fade-in slide-in-from-bottom-1 animate-in fill-mode-both mb-4 h-12 w-auto self-start duration-200 select-none"
       />
       <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-2xl font-medium tracking-tight duration-200">
         How can I help you today?

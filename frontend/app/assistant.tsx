@@ -17,11 +17,18 @@ export function Assistant() {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex h-full min-h-0 flex-col md:flex-row">
+      <div className="relative flex h-full min-h-0 flex-col md:flex-row">
         <Library />
         <div className="min-h-0 min-w-0 flex-1">
           <Thread />
         </div>
+        <p className="text-muted-foreground pointer-events-none absolute top-[18px] right-5 z-10 flex items-center gap-2 text-sm font-normal">
+          Running locally
+          <span
+            aria-hidden
+            className="size-1.5 shrink-0 rounded-full bg-emerald-500"
+          />
+        </p>
       </div>
     </AssistantRuntimeProvider>
   );

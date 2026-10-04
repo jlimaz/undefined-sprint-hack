@@ -180,6 +180,8 @@ export function Library() {
     if (dragDepth.current === 0) setDragOver(false);
   };
 
+  const openPicker = () => inputRef.current?.click();
+
   const onDrop = (event: DragEvent<HTMLElement>) => {
     if (!event.dataTransfer.types.includes("Files")) return;
     event.preventDefault();
@@ -237,8 +239,9 @@ export function Library() {
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-3",
-          files.length === 0 && "group/empty",
+          files.length === 0 && "group/empty cursor-pointer",
         )}
+        onClick={files.length === 0 ? openPicker : undefined}
       >
       <ul
         role="listbox"
@@ -327,7 +330,10 @@ export function Library() {
           Drop files anywhere, or{" "}
           <button
             type="button"
-            onClick={() => inputRef.current?.click()}
+            onClick={(event) => {
+              event.stopPropagation();
+              openPicker();
+            }}
             className="text-blue-400 underline-offset-2 hover:underline"
           >
             browse
