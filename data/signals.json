@@ -1,0 +1,14 @@
+[
+  {"id": "01", "frequency_mhz": 2412, "bandwidth_mhz": 20, "amplitude_dbm": -50, "expected": "wifi"},
+  {"id": "02", "frequency_mhz": 5180, "bandwidth_mhz": 40, "amplitude_dbm": -55, "expected": "wifi"},
+  {"id": "03", "frequency_mhz": 5745, "bandwidth_mhz": 80, "amplitude_dbm": -48, "expected": "wifi"},
+  {"id": "04", "frequency_mhz": 2402, "bandwidth_mhz": 1, "amplitude_dbm": -62, "expected": "bluetooth"},
+  {"id": "05", "frequency_mhz": 2441, "bandwidth_mhz": 1, "amplitude_dbm": -70, "expected": "bluetooth"},
+  {"id": "06", "frequency_mhz": 2480, "bandwidth_mhz": 1, "amplitude_dbm": -65, "expected": "bluetooth"},
+  {"id": "07", "frequency_mhz": 2850, "bandwidth_mhz": 4, "amplitude_dbm": -35, "expected": "radar"},
+  {"id": "08", "frequency_mhz": 9400, "bandwidth_mhz": 10, "amplitude_dbm": -28, "expected": "radar"},
+  {"id": "09", "frequency_mhz": 3000, "bandwidth_mhz": 2, "amplitude_dbm": -40, "expected": "radar"},
+  {"id": "10", "frequency_mhz": 2450, "bandwidth_mhz": 400, "amplitude_dbm": -15, "expected": "jamming"},
+  {"id": "11", "frequency_mhz": 5800, "bandwidth_mhz": 500, "amplitude_dbm": -10, "expected": "jamming"},
+  {"id": "12", "frequency_mhz": 2437, "bandwidth_mhz": 200, "amplitude_dbm": -18, "expected": "jamming"}
+]
