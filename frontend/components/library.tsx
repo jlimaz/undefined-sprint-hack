@@ -19,13 +19,12 @@ type LibraryFile = {
   file: File;
 };
 
-type Filter = "all" | "pdf" | "json";
+type LibraryId = "knowledge" | "data";
 type Kind = "pdf" | "json" | "docs" | "data" | "other";
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "pdf", label: "PDF" },
-  { id: "json", label: "JSON" },
+const LIBRARIES: { id: LibraryId; label: string }[] = [
+  { id: "knowledge", label: "Knowledge" },
+  { id: "data", label: "Data" },
 ];
 
 function formatSize(bytes: number) {
@@ -103,11 +102,17 @@ function FileMark({ kind }: { kind: Kind }) {
 export function Library() {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
-  const [files, setFiles] = useState<LibraryFile[]>([]);
+  const [library, setLibrary] = useState<LibraryId>("knowledge");
+  const [filesByLibrary, setFilesByLibrary] = useState<
+    Record<LibraryId, LibraryFile[]>
+  >({
+    knowledge: [],
+    data: [],
+  });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
   const [dragOver, setDragOver] = useState(false);
+  const files = filesByLibrary[library];
 
   const addFiles = (list: FileList | File[]) => {
     const next = Array.from(list).map((file) => ({
@@ -119,17 +124,19 @@ export function Library() {
       file,
     }));
     if (next.length === 0) return;
-    setFiles((current) => [...next, ...current]);
+    setFilesByLibrary((current) => ({
+      ...current,
+      [library]: [...next, ...current[library]],
+    }));
   };
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return files.filter((file) => {
-      if (filter !== "all" && kindOf(file) !== filter) return false;
       if (needle && !file.name.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [files, filter, query]);
+  }, [files, query]);
 
   const toggle = (id: string) => {
     setSelected((current) => {
@@ -141,7 +148,10 @@ export function Library() {
   };
 
   const remove = (id: string) => {
-    setFiles((current) => current.filter((file) => file.id !== id));
+    setFilesByLibrary((current) => ({
+      ...current,
+      [library]: current[library].filter((file) => file.id !== id),
+    }));
     setSelected((current) => {
       if (!current.has(id)) return current;
       const next = new Set(current);
@@ -201,16 +211,16 @@ export function Library() {
         />
       </label>
 
-      <div role="tablist" aria-label="File types" className="flex shrink-0 gap-1.5">
-        {FILTERS.map((item) => {
-          const active = filter === item.id;
+      <div role="tablist" aria-label="Libraries" className="flex shrink-0 gap-1.5">
+        {LIBRARIES.map((item) => {
+          const active = library === item.id;
           return (
             <button
               key={item.id}
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setFilter(item.id)}
+              onClick={() => setLibrary(item.id)}
               className={cn(
                 "h-8 flex-1 rounded-lg text-sm transition-colors",
                 active
@@ -233,7 +243,7 @@ export function Library() {
       <ul
         role="listbox"
         aria-multiselectable="true"
-        aria-label="Library files"
+        aria-label={`${LIBRARIES.find((item) => item.id === library)?.label} files`}
         className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 py-0.5"
       >
         {visible.length === 0 ? (
