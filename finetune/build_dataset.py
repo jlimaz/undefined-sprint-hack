@@ -1,15 +1,16 @@
 """Convert training observations into the items Laya's fine-tuning script loads.
 
 Writes two balanced training sets, a small one that is a subset of the large one,
-plus the test file both are evaluated on. Every item is tokenised exactly as the
-pipeline tokenises an observation at inference time.
+plus the test file both are evaluated on. The mock file is shared between the two:
+a quarter of its signal types are held out as the test file, and the observations
+of the others are added to the training data. Every item is tokenised exactly as
+the pipeline tokenises an observation at inference time.
 """
 
 import argparse
 import collections
 import json
 import random
-import shutil
 from pathlib import Path
 
 import torch
@@ -28,6 +29,24 @@ DEFAULT_TRAIN = [TRAIN / "sigid.jsonl", TRAIN / "panoradio_hf.jsonl", TRAIN / "d
 STAGES = {"stage1": 2000, "stage2": 12000}
 QUESTION = "family"
 SEED = 20
+# Share of each family's mock signal types kept out of training, as the test set.
+HELD_OUT_SHARE = 0.25
+
+
+def split_mock(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Split the mock rows by signal type into test rows and training rows."""
+    by_family = collections.defaultdict(set)
+    for row in rows:
+        by_family[row["label_family"]].add(row["label_signal"])
+    rng = random.Random(SEED)
+    held_out = set()
+    for family in sorted(by_family):
+        names = sorted(by_family[family])
+        rng.shuffle(names)
+        held_out.update(names[: max(1, round(HELD_OUT_SHARE * len(names)))])
+    test = [row for row in rows if row["label_signal"] in held_out]
+    train = [row for row in rows if row["label_signal"] not in held_out]
+    return test, train
 
 
 def spread(rows: list[dict], rng: random.Random) -> list[dict]:
@@ -90,10 +109,13 @@ def main() -> None:
     question = json.loads(args.questions.read_text())[QUESTION]
     families = list(question["criteria"])
     rows = [row for path in args.train for row in read_jsonl(path)]
-    unseen = {row["label_signal"] for row in read_jsonl(args.test)}
+    test, shared = split_mock(read_jsonl(args.test))
+    unseen = {row["label_signal"] for row in test}
     leaked = {row["label_signal"] for row in rows} & unseen
     if leaked:
         raise SystemExit(f"{len(leaked)} test signals are in the training data, e.g. {sorted(leaked)[:3]}")
+    rows += shared
+    print(f"mock file: {len(test)} test rows from {len(unseen)} signals, {len(shared)} rows added to training")
 
     rng = random.Random(SEED)
     by_family = {
@@ -116,7 +138,7 @@ def main() -> None:
         print(f"  wrote {len(items)} items from {signals} signals to {folder / 'train_items.pt'}")
         print(f"  per family: {dict(counts)}")
     args.out.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(args.test, args.out / "test.jsonl")
+    (args.out / "test.jsonl").write_text("".join(json.dumps(row) + "\n" for row in test))
     print(f"test set: {args.out / 'test.jsonl'}")
 
 
