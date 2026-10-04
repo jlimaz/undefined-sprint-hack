@@ -15,7 +15,7 @@ TEST = ROOT / "finetune" / "out" / "test.jsonl"
 BASE_CHECKPOINT = "convaiinnovations/laya"
 QUESTION = "family"
 # A fine-tune is worth scaling up when it clears both bars on the test set.
-MIN_ACCURACY = 0.30
+MIN_ACCURACY = 0.50
 MAX_SHARE_OF_ONE_FAMILY = 0.50
 
 
@@ -32,8 +32,14 @@ def measure(checkpoint: str, rows: list[dict], questions: dict) -> dict:
         hits = sum(p == t == family for p, t in zip(predicted, truth))
         per_family[family] = (hits, total, predicted.count(family))
     top_family, top_count = collections.Counter(predicted).most_common(1)[0]
+    # Test rows are marked seen or unseen; other files, such as training rows, are not.
+    by_split = collections.defaultdict(list)
+    for row, p, t in zip(rows, predicted, truth):
+        if "split" in row:
+            by_split[row["split"]].append(p == t)
     return {
         "accuracy": sum(p == t for p, t in zip(predicted, truth)) / len(rows),
+        "by_split": {split: (sum(hits), len(hits)) for split, hits in sorted(by_split.items())},
         "per_family": per_family,
         "top_family": top_family,
         "top_share": top_count / len(rows),
@@ -43,6 +49,8 @@ def measure(checkpoint: str, rows: list[dict], questions: dict) -> dict:
 def report(name: str, result: dict) -> None:
     print(f"\n{name}")
     print(f"  overall accuracy: {result['accuracy']:.1%}")
+    for split, (hits, total) in result["by_split"].items():
+        print(f"  {split + ' signals:':<17} {hits / total:.1%} ({hits}/{total})")
     print(f"  most predicted:   {result['top_family']} ({result['top_share']:.1%} of answers)")
     print(f"  {'family':<20} {'found':>11} {'predicted':>10}")
     for family, (hits, total, predicted) in result["per_family"].items():

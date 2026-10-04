@@ -2,9 +2,10 @@
 
 Writes two balanced training sets, a small one that is a subset of the large one,
 plus the test file both are evaluated on. The mock file is shared between the two:
-a quarter of its signal types are held out as the test file, and the observations
-of the others are added to the training data. Every item is tokenised exactly as
-the pipeline tokenises an observation at inference time.
+a quarter of its signal types are held out as the unseen test rows, a fifth of the
+observations of the other types are kept as the seen test rows, and the rest are
+added to the training data. Every item is tokenised exactly as the pipeline
+tokenises an observation at inference time.
 """
 
 import argparse
@@ -29,12 +30,18 @@ DEFAULT_TRAIN = [TRAIN / "sigid.jsonl", TRAIN / "panoradio_hf.jsonl", TRAIN / "d
 STAGES = {"stage1": 2000, "stage2": 12000}
 QUESTION = "family"
 SEED = 20
-# Share of each family's mock signal types kept out of training, as the test set.
+# Share of each family's mock signal types kept out of training, as the unseen test rows.
 HELD_OUT_SHARE = 0.25
+# Families with no unseen test rows. Their mock signals have nothing in common
+# (interference) or sit far from the family's usual bands (navigation_time), so a
+# held-out one cannot be recognised from the others.
+UNSEEN_EXCLUDED = {"interference", "navigation_time"}
+# Share of each shared signal's mock rows kept out of training, as the seen test rows.
+SEEN_TEST_SHARE = 0.2
 
 
 def split_mock(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Split the mock rows by signal type into test rows and training rows."""
+    """Split the mock rows into test rows, marked seen or unseen, and training rows."""
     by_family = collections.defaultdict(set)
     for row in rows:
         by_family[row["label_family"]].add(row["label_signal"])
@@ -43,9 +50,20 @@ def split_mock(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     for family in sorted(by_family):
         names = sorted(by_family[family])
         rng.shuffle(names)
-        held_out.update(names[: max(1, round(HELD_OUT_SHARE * len(names)))])
-    test = [row for row in rows if row["label_signal"] in held_out]
-    train = [row for row in rows if row["label_signal"] not in held_out]
+        if family not in UNSEEN_EXCLUDED:
+            held_out.update(names[: max(1, round(HELD_OUT_SHARE * len(names)))])
+    test = [{**row, "split": "unseen"} for row in rows if row["label_signal"] in held_out]
+    by_signal = collections.defaultdict(list)
+    for row in rows:
+        if row["label_signal"] not in held_out:
+            by_signal[row["label_signal"]].append(row)
+    train = []
+    for name in sorted(by_signal):
+        shared = by_signal[name]
+        rng.shuffle(shared)
+        kept = max(1, round(SEEN_TEST_SHARE * len(shared))) if len(shared) > 1 else 0
+        test.extend({**row, "split": "seen"} for row in shared[:kept])
+        train.extend(shared[kept:])
     return test, train
 
 
@@ -110,16 +128,23 @@ def main() -> None:
     families = list(question["criteria"])
     rows = [row for path in args.train for row in read_jsonl(path)]
     test, shared = split_mock(read_jsonl(args.test))
-    unseen = {row["label_signal"] for row in test}
+    unseen = {row["label_signal"] for row in test if row["split"] == "unseen"}
     leaked = {row["label_signal"] for row in rows} & unseen
     if leaked:
         raise SystemExit(f"{len(leaked)} test signals are in the training data, e.g. {sorted(leaked)[:3]}")
-    rows += shared
-    print(f"mock file: {len(test)} test rows from {len(unseen)} signals, {len(shared)} rows added to training")
+    if {row["id"] for row in test} & {row["id"] for row in shared}:
+        raise SystemExit("Some mock rows are in both the test file and the training data.")
+    splits = collections.Counter(row["split"] for row in test)
+    print(
+        f"mock file: {splits['unseen']} unseen test rows from {len(unseen)} signals, "
+        f"{splits['seen']} seen test rows, {len(shared)} rows added to training"
+    )
 
     rng = random.Random(SEED)
+    # Mock rows come first so every stage trains on all of them; the open data fills the rest.
     by_family = {
-        family: spread([row for row in rows if row["label_family"] == family], rng)
+        family: [row for row in shared if row["label_family"] == family]
+        + spread([row for row in rows if row["label_family"] == family], rng)
         for family in families
     }
     tokenizer = AutoTokenizer.from_pretrained(Path(snapshot_download(BASE_CHECKPOINT)) / "tokenizer")

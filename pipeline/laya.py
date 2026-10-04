@@ -46,9 +46,29 @@ def _scaled(hertz):
     return f"{hertz} Hz"
 
 
+# Upper edge in Hz of each band, named as the question criteria name them.
+BANDS = (
+    (30e3, "very low frequency (VLF)"),
+    (300e3, "low frequency (LF)"),
+    (3e6, "medium wave (MF)"),
+    (30e6, "shortwave (HF)"),
+    (300e6, "VHF"),
+    (3e9, "UHF"),
+)
+
+
+def _band(hertz):
+    """Name the band a frequency falls in."""
+    for upper, name in BANDS:
+        if hertz < upper:
+            return name
+    return "microwave (SHF)"
+
+
 def describe(observation):
     """Rewrite measurements in the same terms as the question criteria."""
     return (
+        f"{_band(observation['center_frequency_hz'])} band, "
         f"centered at {_scaled(observation['center_frequency_hz'])}, "
         f"{_scaled(observation['bandwidth_hz'])} wide, "
         f"{observation['modulation']} modulation."
