@@ -1,0 +1,20 @@
+{
+  "family": {
+    "type": "choice",
+    "instructions": "What kind of radio emitter is this most likely?",
+    "criteria": {
+      "drone_link": "drone control or video; 433 or 900 MHz, 2.4 or 5.8 GHz; 250 kHz to 20 MHz wide; LoRa, GFSK, OFDM or FM",
+      "commercial_wireless": "Wi-Fi, Bluetooth, cellular; 700 MHz to 6 GHz; 1 to 90 MHz wide; QAM, QPSK or OFDM",
+      "radar": "over-the-horizon or surveillance radar; mostly 3 to 40 MHz, some 1 to 4 GHz; 6 kHz to 1 MHz wide; FMCW or pulse",
+      "jamming": "deliberate jammer on shortwave broadcast; 3 to 30 MHz; 7 to 10 kHz wide; AM noise or tones",
+      "interference": "unintentional noise from electronics; any band; narrow; pulse or unmodulated carrier",
+      "military_comms": "military station or data link; below 30 kHz or 3 to 18 MHz, some 137 to 400 MHz; 300 Hz to 30 kHz wide; FSK, PSK or MSK",
+      "amateur_radio": "ham radio digital mode; 3 to 30 MHz or 50, 144 and 432 MHz; under 12.5 kHz wide; FSK, PSK or GMSK",
+      "aviation": "aircraft voice or data; 118 to 137 MHz or shortwave; 3 to 25 kHz wide; AM or FSK",
+      "marine": "ship safety or weather traffic; shortwave or 156 to 162 MHz; under 12 kHz wide; FSK",
+      "satellite": "satellite downlink; 400 to 470 MHz, 1.5 to 2.3 GHz or 8 GHz; 4 kHz to 4 MHz wide; BPSK or PSK",
+      "navigation_time": "time signal or navigation beacon; below 300 kHz or fixed shortwave; under 8 kHz wide; AM, PSK or OOK",
+      "other_civil": "key fob, pager, sensor or weather balloon; 315 to 470 MHz, mostly 433 MHz; 5 to 500 kHz wide; FSK, ASK or AM"
+    }
+  }
+}
