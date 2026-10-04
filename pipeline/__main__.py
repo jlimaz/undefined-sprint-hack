@@ -3,11 +3,11 @@ import sys
 import time
 from pathlib import Path
 
+from pipeline.inputs import MAX_OBSERVATIONS
 from pipeline.laya import classify, load_agent, release
 from pipeline.ollama import DEFAULT_QUESTION, judge, unload, warmup, warmup_seconds
 
 ROOT = Path(__file__).resolve().parent.parent
-MAX_OBSERVATIONS = 100
 
 
 def main():

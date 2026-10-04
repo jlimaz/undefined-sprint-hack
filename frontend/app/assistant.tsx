@@ -13,6 +13,10 @@ export function Assistant() {
   const runtime = useStreamRuntime({
     assistantId: process.env.NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID || "agent",
     apiUrl,
+    // Over SSE the SDK waits for a fetch that Firefox only settles once the
+    // stream has data, and an idle subscription never sends any, so replies
+    // never arrive there.
+    transport: "websocket",
   });
 
   return (

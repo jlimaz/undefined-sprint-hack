@@ -33,6 +33,26 @@ To see only the answer and the reference line:
 python -m pipeline | tail -n 2
 ```
 
+### From the dashboard
+
+The dashboard in `frontend/` runs the same classification on files an operator uploads, then lets them ask about the result in a chat. See [frontend/README.md](frontend/README.md) for setup. `npm run dev` there starts this service next to the web app:
+
+```bash
+python -m uvicorn pipeline.server:app --host 127.0.0.1 --port 8000
+```
+
+| Request | What it does |
+|---|---|
+| `POST /classify` | Takes `{"knowledge": {"name", "text"}, "data": {"name", "text"}}`, runs Laya, and makes the result the current one. |
+| `GET /context` | The current result as the text the chat model answers from, and whether a run is in progress. |
+| `DELETE /context` | Forgets the current result. |
+
+The knowledge file has the shape of `data/questions_20.json`. The data file is a JSON list of observations, or one observation per line as in `data/test_observations.jsonl`; each needs `center_frequency_hz`, `bandwidth_hz` and `modulation`, and `id` defaults to the row number. A file that does not fit is refused with a message naming the file, and the row or question at fault.
+
+One result is kept at a time, in memory. A second run started while one is going is refused.
+
+The chat model is not shown the rows. It gets, per question: what each answer means, the count and observation ids per answer, the mean and lowest confidence, and the 20 least certain observations under 0.5 confidence with their measurements.
+
 ### Asking a different question
 
 The default question is "Which observations are Morse code, and how many are not?". Pass another one on the command line:
@@ -50,7 +70,7 @@ The Ollama model is given the count and observation ids per signal type, and not
 | Laya checkpoint | `LAYA_CHECKPOINT` environment variable (a Hugging Face id or a local folder) | `convaiinnovations/laya` |
 | Ollama model | `OLLAMA_MODEL` environment variable | `qwen3:4b-instruct` |
 | Ollama address | `OLLAMA_HOST` environment variable | `http://127.0.0.1:11434` |
-| Observations per run | `MAX_OBSERVATIONS` in `pipeline/__main__.py` | 100 |
+| Observations per run | `MAX_OBSERVATIONS` in `pipeline/inputs.py` | 100 |
 
 Use a non-thinking Ollama model. `qwen3:4b` (without `-instruct`) reasons at length regardless of settings and runs out of tokens before it answers.
 
@@ -74,6 +94,15 @@ Laya and the Ollama model do not both fit on a small GPU, so they take turns:
 On a 4 GB GPU, 100 observations take about 5 seconds to classify. Reloading Ollama takes 4 to 30 seconds.
 
 Laya's default settings can cut the option descriptions short when there are many of them. `pipeline/laya.py` raises the budget so the full descriptions fit, and stops with an error if they ever do not.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests
+```
+
+The tests cover file checking, the text built for the chat model and the HTTP service. They do not load Laya or call Ollama.
 
 ## Fine-tuning
 

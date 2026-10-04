@@ -1,0 +1,82 @@
+"""Turn Laya's answers into the text the chat model answers from."""
+
+LOW_CONFIDENCE = 0.5
+MAX_LOW_CONFIDENCE = 20
+
+
+def _members(name, question, rows):
+    """Observation ids per answer, keeping answers nobody got."""
+    members = {option: [] for option in question["criteria"]}
+    for row in rows:
+        members.setdefault(row["answers"][name][0], []).append(str(row["id"]))
+    return members
+
+
+def _low_confidence(name, rows):
+    """Rows Laya was unsure about for one question, least certain first."""
+    low = [row for row in rows if row["answers"][name][1] < LOW_CONFIDENCE]
+    return sorted(low, key=lambda row: row["answers"][name][1])
+
+
+def build_context(names, questions, rows, total):
+    """Describe the classification so a small model can answer without counting."""
+    lines = [
+        f"Laya classified {len(rows)} observations from {names['data']}, "
+        f"using the questions in {names['knowledge']}."
+    ]
+    if total > len(rows):
+        lines.append(f"Only the first {len(rows)} of {total} rows in the file were classified.")
+    for name, question in questions.items():
+        lines += ["", f"Question {name!r}: {question['instructions']}", "What each answer means:"]
+        lines += [f"- {option}: {description}" for option, description in question["criteria"].items()]
+        lines.append("Answer (count): observation ids")
+        lines += [
+            f"- {option} ({len(ids)}): {', '.join(ids) or 'none'}"
+            for option, ids in _members(name, question, rows).items()
+        ]
+        confidences = [row["answers"][name][1] for row in rows]
+        lines.append(
+            f"Confidence: mean {sum(confidences) / len(confidences):.2f}, "
+            f"lowest {min(confidences):.2f}."
+        )
+        low = _low_confidence(name, rows)
+        if not low:
+            lines.append(f"No observation is below {LOW_CONFIDENCE:.2f} confidence.")
+            continue
+        shown = (
+            f"Only the {MAX_LOW_CONFIDENCE} least certain are listed"
+            if len(low) > MAX_LOW_CONFIDENCE
+            else "Least certain first"
+        )
+        lines.append(
+            f"{len(low)} observations are below {LOW_CONFIDENCE:.2f} confidence. "
+            f"{shown}, as id: answer at confidence; measurements"
+        )
+        for row in low[:MAX_LOW_CONFIDENCE]:
+            choice, confidence = row["answers"][name]
+            lines.append(f"- {row['id']}: {choice} at {confidence:.2f}; {row['state']}")
+    return "\n".join(lines)
+
+
+def build_summary(names, questions, rows, total, seconds):
+    """The short account of a run that the dashboard shows."""
+    return {
+        "knowledge_name": names["knowledge"],
+        "data_name": names["data"],
+        "observations": len(rows),
+        "total_rows": total,
+        "questions": [
+            {
+                "name": name,
+                "instructions": question["instructions"],
+                "counts": {
+                    option: len(ids) for option, ids in _members(name, question, rows).items()
+                },
+            }
+            for name, question in questions.items()
+        ],
+        "low_confidence": sum(
+            any(row["answers"][name][1] < LOW_CONFIDENCE for name in questions) for row in rows
+        ),
+        "seconds": round(seconds, 1),
+    }

@@ -1,14 +1,23 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { useAnalysis, type AnalysisSummary } from "@/hooks/use-analysis";
+import {
+  inspectFile,
+  MAX_FILE_BYTES,
+  type FileCheck,
+  type LayaRole,
+} from "@/lib/laya-files";
 import { cn } from "@/lib/utils";
 import {
   FileJsonIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
+  LoaderIcon,
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 
 type LibraryFile = {
   id: string;
@@ -17,15 +26,27 @@ type LibraryFile = {
   type: string;
   addedAt: number;
   file: File;
+  /** What the file turned out to hold; null while it is being read. */
+  check: FileCheck | null;
 };
 
-type LibraryId = "knowledge" | "data";
+type LibraryId = LayaRole;
 type Kind = "pdf" | "json" | "docs" | "data" | "other";
 
 const LIBRARIES: { id: LibraryId; label: string }[] = [
   { id: "knowledge", label: "Knowledge" },
   { id: "data", label: "Data" },
 ];
+
+const LABELS: Record<LibraryId, string> = {
+  knowledge: "Knowledge",
+  data: "Data",
+};
+
+const NO_SELECTION: Record<LibraryId, string | null> = {
+  knowledge: null,
+  data: null,
+};
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -54,7 +75,7 @@ function kindOf(file: Pick<LibraryFile, "name" | "type">): Kind {
   const name = file.name.toLowerCase();
   const type = file.type.toLowerCase();
   if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
-  if (type.includes("json") || name.endsWith(".json")) return "json";
+  if (type.includes("json") || /\.jsonl?$/.test(name)) return "json";
   if (
     /\.(csv|tsv|xls|xlsx|xml)$/.test(name) ||
     type.includes("csv") ||
@@ -71,6 +92,40 @@ function kindOf(file: Pick<LibraryFile, "name" | "type">): Kind {
     return "docs";
   }
   return "other";
+}
+
+async function inspect(file: File): Promise<FileCheck> {
+  if (file.size > MAX_FILE_BYTES) {
+    return { ok: false, detail: `Larger than ${formatSize(MAX_FILE_BYTES)}` };
+  }
+  try {
+    return inspectFile(await file.text());
+  } catch {
+    return { ok: false, detail: "Could not read the file" };
+  }
+}
+
+/** Whether a file can be run from the library it sits in, and what to say about it. */
+function statusOf(file: LibraryFile, library: LibraryId) {
+  const { check } = file;
+  if (!check) return { usable: false, problem: null, text: "Checking…" };
+  if (!check.ok) return { usable: false, problem: check.detail, text: null };
+  if (check.role !== library) {
+    return {
+      usable: false,
+      problem: `Looks like a ${check.role} file. Add it under ${LABELS[check.role]}.`,
+      text: null,
+    };
+  }
+  return { usable: true, problem: null, text: check.detail };
+}
+
+function describeSummary(summary: AnalysisSummary) {
+  const rows = `${summary.observations} ${summary.observations === 1 ? "row" : "rows"}`;
+  if (summary.questions.length !== 1) {
+    return `${rows} · ${summary.questions.length} questions`;
+  }
+  return `${rows} · ${Object.keys(summary.questions[0].counts).length} types`;
 }
 
 function FileMark({ kind }: { kind: Kind }) {
@@ -109,25 +164,61 @@ export function Library() {
     knowledge: [],
     data: [],
   });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // One file per library takes part in a run.
+  const [selected, setSelected] = useState(NO_SELECTION);
+  // The files the active classification came from, while they are still listed.
+  const [source, setSource] = useState(NO_SELECTION);
   const [query, setQuery] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const files = filesByLibrary[library];
+  const { running, summary, error, run, clear, refresh } = useAnalysis();
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const chosen = (id: LibraryId) => {
+    const file = filesByLibrary[id].find((item) => item.id === selected[id]);
+    return file && statusOf(file, id).usable ? file : undefined;
+  };
+  const knowledgeFile = chosen("knowledge");
+  const dataFile = chosen("data");
+  const missing = LIBRARIES.filter((item) => !chosen(item.id)).map((item) =>
+    item.label.toLowerCase(),
+  );
 
   const addFiles = (list: FileList | File[]) => {
-    const next = Array.from(list).map((file) => ({
+    const target = library;
+    const next: LibraryFile[] = Array.from(list).map((file) => ({
       id: crypto.randomUUID(),
       name: file.name,
       size: file.size,
       type: file.type,
       addedAt: Date.now(),
       file,
+      check: null,
     }));
     if (next.length === 0) return;
     setFilesByLibrary((current) => ({
       ...current,
-      [library]: [...next, ...current[library]],
+      [target]: [...next, ...current[target]],
     }));
+    for (const item of next) {
+      void inspect(item.file).then((check) => {
+        setFilesByLibrary((current) => ({
+          ...current,
+          [target]: current[target].map((file) =>
+            file.id === item.id ? { ...file, check } : file,
+          ),
+        }));
+        // The first usable file in a library is picked for the operator.
+        if (check.ok && check.role === target) {
+          setSelected((current) =>
+            current[target] ? current : { ...current, [target]: item.id },
+          );
+        }
+      });
+    }
   };
 
   const visible = useMemo(() => {
@@ -139,12 +230,10 @@ export function Library() {
   }, [files, query]);
 
   const toggle = (id: string) => {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelected((current) => ({
+      ...current,
+      [library]: current[library] === id ? null : id,
+    }));
   };
 
   const remove = (id: string) => {
@@ -152,12 +241,25 @@ export function Library() {
       ...current,
       [library]: current[library].filter((file) => file.id !== id),
     }));
-    setSelected((current) => {
-      if (!current.has(id)) return current;
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
+    setSelected((current) =>
+      current[library] === id ? { ...current, [library]: null } : current,
+    );
+    // The chat should not keep answering from a file the operator took away.
+    if (source[library] === id) {
+      setSource(NO_SELECTION);
+      void clear();
+    }
+  };
+
+  const onRun = async () => {
+    if (!knowledgeFile || !dataFile) return;
+    const next = { knowledge: knowledgeFile.id, data: dataFile.id };
+    if (await run(knowledgeFile.file, dataFile.file)) setSource(next);
+  };
+
+  const onClear = () => {
+    setSource(NO_SELECTION);
+    void clear();
   };
 
   const onDragEnter = (event: DragEvent<HTMLElement>) => {
@@ -231,6 +333,12 @@ export function Library() {
               )}
             >
               {item.label}
+              {chosen(item.id) && (
+                <span
+                  aria-hidden
+                  className="ms-1.5 inline-block size-1.5 rounded-full bg-emerald-500 align-middle"
+                />
+              )}
             </button>
           );
         })}
@@ -245,7 +353,6 @@ export function Library() {
       >
       <ul
         role="listbox"
-        aria-multiselectable="true"
         aria-label={`${LIBRARIES.find((item) => item.id === library)?.label} files`}
         className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-0.5 py-0.5"
       >
@@ -263,28 +370,42 @@ export function Library() {
           </li>
         ) : (
           visible.map((item) => {
-            const isSelected = selected.has(item.id);
+            const status = statusOf(item, library);
+            const isSelected = status.usable && selected[library] === item.id;
             return (
               <li key={item.id} className="group relative">
                 <button
                   type="button"
                   role="option"
                   aria-selected={isSelected}
-                  title={item.name}
-                  onClick={() => toggle(item.id)}
+                  aria-disabled={!status.usable}
+                  title={
+                    status.problem
+                      ? `${item.name}: ${status.problem}`
+                      : item.name
+                  }
+                  onClick={status.usable ? () => toggle(item.id) : undefined}
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-lg border px-2 py-2 text-left",
                     isSelected
                       ? "border-blue-500/70 bg-blue-500/15"
                       : "border-transparent hover:bg-muted/50",
+                    !status.usable && "cursor-default",
                   )}
                 >
                   <FileMark kind={kindOf(item)} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{item.name}</span>
-                    <span className="text-muted-foreground block truncate text-xs">
-                      {formatSize(item.size)} · {formatAdded(item.addedAt)}
-                    </span>
+                    {status.problem ? (
+                      <span className="text-destructive block truncate text-xs dark:text-red-200">
+                        {status.problem}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {status.text} · {formatSize(item.size)} ·{" "}
+                        {formatAdded(item.addedAt)}
+                      </span>
+                    )}
                   </span>
                   <span
                     aria-hidden
@@ -293,6 +414,7 @@ export function Library() {
                       isSelected
                         ? "border-blue-500 bg-blue-500 shadow-[inset_0_0_0_3px_var(--color-sidebar)]"
                         : "border-muted-foreground/40",
+                      !status.usable && "invisible",
                     )}
                   />
                 </button>
@@ -341,10 +463,92 @@ export function Library() {
         </p>
       </div>
       </div>
+
+      <div className="flex shrink-0 flex-col gap-2">
+        {error && (
+          <p
+            role="alert"
+            className="border-destructive bg-destructive/10 text-destructive dark:bg-destructive/5 rounded-md border p-3 text-sm dark:text-red-200"
+          >
+            {error.field && (
+              <span className="font-medium">{LABELS[error.field]} file: </span>
+            )}
+            {error.message}
+          </p>
+        )}
+        {running ? (
+          <p
+            role="status"
+            className="text-muted-foreground px-1 text-xs"
+          >
+            Laya has the GPU, so chat is paused. This can take a minute.
+          </p>
+        ) : (
+          summary && (
+            <div className="flex items-start gap-2 px-1 text-xs">
+              <span
+                aria-hidden
+                className="mt-1 size-1.5 shrink-0 rounded-full bg-emerald-500"
+              />
+              <p className="text-muted-foreground min-w-0 flex-1">
+                <span className="text-foreground block">
+                  Active · {describeSummary(summary)}
+                </span>
+                <span
+                  className="block truncate"
+                  title={`${summary.knowledge_name} + ${summary.data_name}`}
+                >
+                  {summary.knowledge_name} + {summary.data_name}
+                </span>
+                {summary.total_rows > summary.observations && (
+                  <span className="block">
+                    First {summary.observations} of {summary.total_rows} rows
+                  </span>
+                )}
+                {summary.low_confidence > 0 && (
+                  <span className="block">
+                    {summary.low_confidence} low confidence
+                  </span>
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-blue-400 underline-offset-2 hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+          )
+        )}
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          disabled={running || missing.length > 0}
+          aria-busy={running}
+          onClick={onRun}
+        >
+          {running ? (
+            <>
+              <LoaderIcon className="animate-spin" />
+              Classifying…
+            </>
+          ) : (
+            "Run Laya"
+          )}
+        </Button>
+        {!running && missing.length > 0 && (
+          <p className="text-muted-foreground px-1 text-xs">
+            Select a {missing.join(" file and a ")} file
+          </p>
+        )}
+      </div>
       <input
         ref={inputRef}
         type="file"
         multiple
+        accept=".json,.jsonl,application/json"
         className="sr-only"
         onChange={(event) => {
           if (event.target.files) addFiles(event.target.files);

@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n frontend,backend -c cyan,magenta npm:dev:frontend npm:dev:backend",
+    "dev": "concurrently -n frontend,backend,pipeline -c cyan,magenta,yellow npm:dev:frontend npm:dev:backend npm:dev:pipeline",
     "dev:frontend": "next dev --turbopack",
     "dev:backend": "langgraphjs dev --no-browser",
+    "dev:pipeline": "cd .. && .venv/bin/python -m uvicorn pipeline.server:app --host 127.0.0.1 --port 8000",
     "build": "next build",
     "start": "next start",
     "lint": "oxlint && oxfmt --check",

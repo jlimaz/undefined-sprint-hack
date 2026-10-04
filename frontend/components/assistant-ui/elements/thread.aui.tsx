@@ -24,6 +24,7 @@ import {
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAnalysis } from "@/hooks/use-analysis";
 import eagleIcon from "@/app/eagle_icon.png";
 import { cn } from "@/lib/utils";
 import {
@@ -353,6 +354,9 @@ const ThreadScrollToBottom: FC = () => {
 };
 
 const ThreadWelcome: FC = () => {
+  const running = useAnalysis((s) => s.running);
+  const summary = useAnalysis((s) => s.summary);
+
   return (
     <div className="aui-thread-welcome-root mb-6 flex flex-col px-2">
       <img
@@ -366,13 +370,56 @@ const ThreadWelcome: FC = () => {
       <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-2xl font-medium tracking-tight duration-200">
         How can I help you today?
       </p>
+      <p
+        role="status"
+        className="aui-thread-welcome-status fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-muted-foreground mt-2 text-sm duration-200"
+      >
+        {running
+          ? "Laya is classifying. Chat resumes when it finishes."
+          : summary
+            ? `Ask about the ${summary.observations} observations Laya classified.`
+            : "Add a knowledge file and a data file in the Library, then run Laya."}
+      </p>
     </div>
   );
 };
 
+// What an operator usually wants first from a fresh classification.
+const ANALYSIS_PROMPTS = [
+  "Summarize the classification.",
+  "Report anomalies and low-confidence signals.",
+  "Which signal types dominate?",
+];
+
+const SUGGESTION_ROW =
+  "aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-200";
+const SUGGESTION_BUTTON =
+  "aui-thread-welcome-suggestion group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none";
+const SUGGESTION_MARK =
+  "text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none";
+
 const ThreadSuggestions: FC = () => {
+  const grounded = useAnalysis((s) => s.summary !== null && !s.running);
+
   return (
     <div className="aui-thread-welcome-suggestions flex w-full flex-col">
+      {grounded &&
+        ANALYSIS_PROMPTS.map((prompt) => (
+          <div key={prompt} className={SUGGESTION_ROW}>
+            <ThreadPrimitive.Suggestion
+              prompt={prompt}
+              send
+              className={SUGGESTION_BUTTON}
+            >
+              <span aria-hidden className={SUGGESTION_MARK}>
+                {">"}
+              </span>
+              <span className="text-foreground min-w-0 flex-1 truncate">
+                {prompt}
+              </span>
+            </ThreadPrimitive.Suggestion>
+          </div>
+        ))}
       <ThreadPrimitive.Suggestions>
         {() => <ThreadSuggestionItem />}
       </ThreadPrimitive.Suggestions>
@@ -382,10 +429,10 @@ const ThreadSuggestions: FC = () => {
 
 const ThreadSuggestionItem: FC = () => {
   return (
-    <div className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-200">
-      <SuggestionPrimitive.Trigger send render={<button type="button" className="aui-thread-welcome-suggestion group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none" />}><span
+    <div className={SUGGESTION_ROW}>
+      <SuggestionPrimitive.Trigger send render={<button type="button" className={SUGGESTION_BUTTON} />}><span
                       aria-hidden
-                      className="text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none"
+                      className={SUGGESTION_MARK}
                     >
                       {">"}
                     </span><span className="min-w-0 flex-1 truncate">
@@ -397,6 +444,8 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+  const isClassifying = useAnalysis((s) => s.running);
+
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone render={<div data-slot="aui_composer-shell" className="border-foreground/10 focus-within:border-foreground/25 data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]" />}><ComposerAttachments /><ComposerPrimitive.Input
@@ -405,6 +454,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
                       rows={1}
                       autoFocus={autoFocus}
                       enterKeyHint="send"
+                      submitMode={isClassifying ? "none" : undefined}
                       aria-label="Message input"
                     /><ComposerAction /></ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
@@ -418,6 +468,8 @@ const ComposerAction: FC = () => {
       s.composer.submission !== undefined &&
       !(s.thread.isRunning && s.thread.capabilities.cancel),
   );
+  // The chat model is unloaded while Laya has the GPU.
+  const isClassifying = useAnalysis((s) => s.running);
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-end">
@@ -437,7 +489,7 @@ const ComposerAction: FC = () => {
               s.composer.submission === undefined)
           }
         >
-          <ComposerPrimitive.Send render={<TooltipIconButton tooltip="Send message" side="bottom" type="button" variant="default" size="icon" className="aui-composer-send size-7 rounded-full" aria-label="Send message" />}><ArrowUpIcon className="aui-composer-send-icon size-4" /></ComposerPrimitive.Send>
+          <ComposerPrimitive.Send disabled={isClassifying} render={<TooltipIconButton tooltip={isClassifying ? "Laya is classifying" : "Send message"} side="bottom" type="button" variant="default" size="icon" className="aui-composer-send size-7 rounded-full" aria-label="Send message" />}><ArrowUpIcon className="aui-composer-send-icon size-4" /></ComposerPrimitive.Send>
         </AuiIf>
         <AuiIf
           condition={(s) =>
