@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | Event | SprintHack@ND |
-| Team | Gabriel da Silva Marques, José Lima |
+| Team | Gabriel Marques, José Lima |
 | Repository | <https://github.com/jlimaz/undefined-sprint-hack> |
 | Runs on | One computer, with no cloud service |
 
