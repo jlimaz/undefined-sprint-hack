@@ -1,8 +1,7 @@
 """Turn the Artemis signal catalogue (sigidwiki) into training observations.
 
 Each catalogued signal has listed frequencies, bandwidths, modulations and
-categories. Signals that the test file already uses are left out, so the test
-file stays a test of signals never seen in training.
+categories.
 """
 
 import argparse
@@ -10,7 +9,7 @@ import collections
 import random
 import sqlite3
 
-from finetune.sources.common import RAW, TRAIN, observe, test_signal_names, write_jsonl
+from finetune.sources.common import RAW, TRAIN, observe, write_jsonl
 
 DATABASE = RAW / "artemis" / "data.sqlite"
 OUTPUT = TRAIN / "sigid.jsonl"
@@ -98,13 +97,10 @@ def main() -> None:
     parser.add_argument("--rows-per-family", type=int, default=ROWS_PER_FAMILY)
     args = parser.parse_args()
 
-    held_out = test_signal_names()
     skipped = collections.Counter()
     by_family = collections.defaultdict(list)
     for signal in load_signals():
-        if signal["name"] in held_out:
-            skipped["used by the test file"] += 1
-        elif signal["family"] is None:
+        if signal["family"] is None:
             skipped["no family for its categories"] += 1
         elif not (signal["frequencies"] and signal["bandwidths"]):
             skipped["missing frequency or bandwidth"] += 1

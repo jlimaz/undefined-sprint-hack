@@ -15,7 +15,7 @@ _SYSTEM = (
     "Answer the operator's question in plain language, using only the "
     "classification results provided. Do not revise or recount them."
 )
-DEFAULT_QUESTION = "Which observations are signal jammers, and how many are not?"
+DEFAULT_QUESTION = "Which observations are Morse code, and how many are not?"
 _UNLOAD_TIMEOUT_S = 10.0
 _THINK_BLOCK = re.compile(r"<think>[\s\S]*?</think>")
 _warmed = False
@@ -58,18 +58,18 @@ def warmup_seconds() -> float:
     return _warmup_s
 
 
-def judge(items: list[dict], families: list[str], question: str = DEFAULT_QUESTION) -> str:
+def judge(items: list[dict], modes: list[str], question: str = DEFAULT_QUESTION) -> str:
     """Answer one question about how Laya classified the observations."""
-    ids = {family: [] for family in families}
+    ids = {mode: [] for mode in modes}
     for item in items:
-        ids.setdefault(item["family"], []).append(str(item["id"]))
+        ids.setdefault(item["mode"], []).append(str(item["id"]))
     lines = [
-        f"- {family} ({len(members)}): {', '.join(members) or 'none'}"
-        for family, members in ids.items()
+        f"- {mode} ({len(members)}): {', '.join(members) or 'none'}"
+        for mode, members in ids.items()
     ]
     prompt = (
         f"Laya classified {len(items)} observations. "
-        "Family (count): observation ids\n"
+        "Signal type (count): observation ids\n"
         + "\n".join(lines)
         + f"\n\nQuestion: {question}"
     )

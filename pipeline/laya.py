@@ -13,8 +13,8 @@ CHECKPOINT = os.environ.get("LAYA_CHECKPOINT", "convaiinnovations/laya")
 # The checkpoint is about 1.6 GiB of float32 weights, plus working memory.
 CUDA_FREE_BYTES_NEEDED = 2 * 1024**3
 BATCH_SIZE = 32
-# Laya's default question budget (192 tokens) cuts each of the 12 family
-# descriptions to about 13 tokens. The full question needs 414.
+# Laya's default question budget (192 tokens) cuts the option descriptions short
+# when there are many of them. This budget held a 12-option question of 414 tokens.
 MAX_LEN = 512
 HEAD_MAX_LEN = 448
 

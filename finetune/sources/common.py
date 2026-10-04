@@ -7,11 +7,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
 TRAIN = ROOT / "data" / "train"
-MOCK = ROOT / "data" / "mock_observations_20.jsonl"
 
-# How an observation differs from the catalogue entry, measured on the mock file:
-# bandwidth is the listed value times roughly N(1, 0.1), and one modulation in five
-# is reported as unknown.
+# How an observation differs from the catalogue entry: bandwidth is the listed value
+# times roughly N(1, 0.1), and one modulation in five is reported as unknown. The
+# figures were measured on an earlier set of simulated observations.
 BANDWIDTH_SPREAD = 0.1
 UNKNOWN_MODULATION_RATE = 0.2
 SNR_DB_RANGE = (6.0, 35.0)
@@ -26,11 +25,6 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
     for index, row in enumerate(rows):
         row["id"] = index
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
-
-
-def test_signal_names() -> set[str]:
-    """Signals the test file uses, which training data must not contain."""
-    return {row["label_signal"] for row in read_jsonl(MOCK)}
 
 
 def observe(rng: random.Random, frequencies: list[int], bandwidths: list[int], modulations: list[str]) -> dict:

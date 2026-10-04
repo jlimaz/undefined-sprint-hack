@@ -1,10 +1,8 @@
 """Convert training observations into the items Laya's fine-tuning script loads.
 
-Writes two balanced training sets, a small one that is a subset of the large one,
-plus the test file both are evaluated on. The mock file is shared between the two:
-a quarter of its signal types are held out as the unseen test rows, a fifth of the
-observations of the other types are kept as the seen test rows, and the rest are
-added to the training data. Every item is tokenised exactly as the pipeline
+The Panoradio observations supply the eight signal types Laya is asked to tell
+apart, and the sigid catalogue supplies the "other" class. A tenth of the data is
+set aside as the test file. Every item is tokenised exactly as the pipeline
 tokenises an observation at inference time.
 """
 
@@ -19,56 +17,58 @@ from huggingface_hub import snapshot_download
 from laya.common import QTYPES, build_sequence
 from transformers import AutoTokenizer
 
-from finetune.sources.common import MOCK, ROOT, TRAIN, read_jsonl
+from finetune.sources.common import ROOT, TRAIN, read_jsonl, write_jsonl
 from pipeline.laya import HEAD_MAX_LEN, MAX_LEN, describe
 
 # Fine-tuning always starts from the published checkpoint.
 BASE_CHECKPOINT = "convaiinnovations/laya"
 QUESTIONS = ROOT / "data" / "questions_20.json"
 OUT = ROOT / "finetune" / "out"
-DEFAULT_TRAIN = [TRAIN / "sigid.jsonl", TRAIN / "panoradio_hf.jsonl", TRAIN / "drone_links.jsonl"]
-STAGES = {"stage1": 2000, "stage2": 12000}
-QUESTION = "family"
+TEST = ROOT / "data" / "test_observations.jsonl"
+PANORADIO = TRAIN / "panoradio_hf.jsonl"
+SIGID = TRAIN / "sigid.jsonl"
+QUESTION = "mode"
 SEED = 20
-# Share of each family's mock signal types kept out of training, as the unseen test rows.
-HELD_OUT_SHARE = 0.25
-# Families with no unseen test rows. Their mock signals have nothing in common
-# (interference) or sit far from the family's usual bands (navigation_time), so a
-# held-out one cannot be recognised from the others.
-UNSEEN_EXCLUDED = {"interference", "navigation_time"}
-# Share of each shared signal's mock rows kept out of training, as the seen test rows.
-SEEN_TEST_SHARE = 0.2
+TEST_SHARE = 0.1
+# With every sigid row, "other" would be two thirds of the data.
+OTHER_ROWS = 1500
 
-
-def split_mock(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Split the mock rows into test rows, marked seen or unseen, and training rows."""
-    by_family = collections.defaultdict(set)
-    for row in rows:
-        by_family[row["label_family"]].add(row["label_signal"])
-    rng = random.Random(SEED)
-    held_out = set()
-    for family in sorted(by_family):
-        names = sorted(by_family[family])
-        rng.shuffle(names)
-        if family not in UNSEEN_EXCLUDED:
-            held_out.update(names[: max(1, round(HELD_OUT_SHARE * len(names)))])
-    test = [{**row, "split": "unseen"} for row in rows if row["label_signal"] in held_out]
-    by_signal = collections.defaultdict(list)
-    for row in rows:
-        if row["label_signal"] not in held_out:
-            by_signal[row["label_signal"]].append(row)
-    train = []
-    for name in sorted(by_signal):
-        shared = by_signal[name]
-        rng.shuffle(shared)
-        kept = max(1, round(SEEN_TEST_SHARE * len(shared))) if len(shared) > 1 else 0
-        test.extend({**row, "split": "seen"} for row in shared[:kept])
-        train.extend(shared[kept:])
-    return test, train
+# Panoradio signal name: the answer option it belongs to. Modes that centre
+# frequency, bandwidth and modulation cannot tell apart share an option.
+MODE_BY_SIGNAL = {
+    "Morse Code (CW)": "morse",
+    "PSK31": "psk",
+    "PSK63": "psk",
+    "QPSK31": "psk",
+    "RTTY 45 baud 170 Hz": "rtty",
+    "Olivia 8/250": "olivia",
+    "Olivia 16/500": "olivia",
+    "Olivia 16/1000": "olivia",
+    "Olivia 32/1000": "olivia",
+    "DominoEX 11": "dominoex",
+    "MT63-1000": "mt63",
+    "NAVTEX (SITOR-B)": "navtex",
+    "HF weather fax": "weather_fax",
+}
+# Catalogue entries for the same modes under a generic name. Calling them "other"
+# would contradict the Panoradio rows, so they are left out.
+EXCLUDED_SIGID = {
+    "Olivia",
+    "MT63",
+    "DominoEX",
+    "DominoF",
+    "Radio Teletype (RTTY)",
+    "RTTYM",
+    "Coherent CW",
+    "Phase Shift Keying (PSK)",
+    "Coherent BPSK",
+    "PSK-AM",
+    "SITOR-B",
+}
 
 
 def spread(rows: list[dict], rng: random.Random) -> list[dict]:
-    """Order one family's rows so any prefix covers as many signals as possible."""
+    """Order rows so any prefix covers as many signals as possible."""
     by_signal = collections.defaultdict(list)
     for row in rows:
         by_signal[row["label_signal"]].append(row)
@@ -83,15 +83,32 @@ def spread(rows: list[dict], rng: random.Random) -> list[dict]:
     return ordered
 
 
-def select(by_family: dict[str, list[dict]], total: int) -> list[dict]:
-    """Take an equal share of each family, in the order `spread` gave them."""
-    quota = -(-total // len(by_family))
-    chosen = []
-    for family, rows in by_family.items():
-        if len(rows) < quota:
-            print(f"  {family}: only {len(rows)} rows for a quota of {quota}")
-        chosen.extend(rows[:quota])
-    return chosen[:total] if len(chosen) > total else chosen
+def split_rows(panoradio: list[dict], sigid: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Label every row with its answer option and split them into training and test rows."""
+    rng = random.Random(SEED)
+    by_mode = collections.defaultdict(list)
+    for row in panoradio:
+        mode = MODE_BY_SIGNAL[row["label_signal"]]
+        by_mode[mode].append({**row, "label_mode": mode})
+    train, test = [], []
+    for mode in sorted(by_mode):
+        rows = by_mode[mode]
+        rng.shuffle(rows)
+        kept = round(TEST_SHARE * len(rows))
+        test.extend(rows[:kept])
+        train.extend(rows[kept:])
+
+    # "other" is tested on signal types the model never trained on.
+    other = [{**row, "label_mode": "other"} for row in sigid if row["label_signal"] not in EXCLUDED_SIGID]
+    names = sorted({row["label_signal"] for row in other})
+    rng.shuffle(names)
+    held_out = set(names[: round(TEST_SHARE * len(names))])
+    test_quota = round(TEST_SHARE * OTHER_ROWS)
+    test.extend(spread([row for row in other if row["label_signal"] in held_out], rng)[:test_quota])
+    train.extend(spread([row for row in other if row["label_signal"] not in held_out], rng)[: OTHER_ROWS - test_quota])
+    rng.shuffle(train)
+    rng.shuffle(test)
+    return train, test
 
 
 def build_item(tokenizer, row: dict, question: dict, rng: random.Random) -> dict:
@@ -106,7 +123,7 @@ def build_item(tokenizer, row: dict, question: dict, rng: random.Random) -> dict
     ids, markers = build_sequence(tokenizer, describe(row), internal, MAX_LEN, HEAD_MAX_LEN)
     if len(markers) != len(labels):
         raise SystemExit("An item lost options to truncation; check MAX_LEN and HEAD_MAX_LEN.")
-    label = labels.index(row["label_family"])
+    label = labels.index(row["label_mode"])
     return {
         "ids": ids,
         "markers": markers,
@@ -118,53 +135,29 @@ def build_item(tokenizer, row: dict, question: dict, rng: random.Random) -> dict
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--train", type=Path, nargs="+", default=DEFAULT_TRAIN)
-    parser.add_argument("--test", type=Path, default=MOCK)
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
     parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--test", type=Path, default=TEST, help="where to write the test rows")
     args = parser.parse_args()
 
     question = json.loads(args.questions.read_text())[QUESTION]
-    families = list(question["criteria"])
-    rows = [row for path in args.train for row in read_jsonl(path)]
-    test, shared = split_mock(read_jsonl(args.test))
-    unseen = {row["label_signal"] for row in test if row["split"] == "unseen"}
-    leaked = {row["label_signal"] for row in rows} & unseen
-    if leaked:
-        raise SystemExit(f"{len(leaked)} test signals are in the training data, e.g. {sorted(leaked)[:3]}")
-    if {row["id"] for row in test} & {row["id"] for row in shared}:
-        raise SystemExit("Some mock rows are in both the test file and the training data.")
-    splits = collections.Counter(row["split"] for row in test)
-    print(
-        f"mock file: {splits['unseen']} unseen test rows from {len(unseen)} signals, "
-        f"{splits['seen']} seen test rows, {len(shared)} rows added to training"
-    )
+    train, test = split_rows(read_jsonl(PANORADIO), read_jsonl(SIGID))
+    missing = {row["label_mode"] for row in train + test} ^ set(question["criteria"])
+    if missing:
+        raise SystemExit(f"The question's options and the data's labels differ: {sorted(missing)}")
+    for name, rows in (("training", train), ("test", test)):
+        counts = collections.Counter(row["label_mode"] for row in rows)
+        print(f"{name}: {len(rows)} rows, {dict(sorted(counts.items()))}")
 
-    rng = random.Random(SEED)
-    # Mock rows come first so every stage trains on all of them; the open data fills the rest.
-    by_family = {
-        family: [row for row in shared if row["label_family"] == family]
-        + spread([row for row in rows if row["label_family"] == family], rng)
-        for family in families
-    }
     tokenizer = AutoTokenizer.from_pretrained(Path(snapshot_download(BASE_CHECKPOINT)) / "tokenizer")
-    for stage, total in STAGES.items():
-        print(f"{stage}: {total} items")
-        chosen = select(by_family, total)
-        # A fixed seed per stage keeps the item order independent of the other stage.
-        stage_rng = random.Random(f"{SEED}-{stage}")
-        items = [build_item(tokenizer, row, question, stage_rng) for row in chosen]
-        folder = args.out / stage
-        folder.mkdir(parents=True, exist_ok=True)
-        torch.save(items, folder / "train_items.pt")
-        (folder / "train_rows.jsonl").write_text("".join(json.dumps(row) + "\n" for row in chosen))
-        counts = collections.Counter(row["label_family"] for row in chosen)
-        signals = len({row["label_signal"] for row in chosen})
-        print(f"  wrote {len(items)} items from {signals} signals to {folder / 'train_items.pt'}")
-        print(f"  per family: {dict(counts)}")
+    rng = random.Random(SEED)
+    items = [build_item(tokenizer, row, question, rng) for row in train]
     args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / "test.jsonl").write_text("".join(json.dumps(row) + "\n" for row in test))
-    print(f"test set: {args.out / 'test.jsonl'}")
+    torch.save(items, args.out / "train_items.pt")
+    write_jsonl(args.out / "train_rows.jsonl", train)
+    write_jsonl(args.test, test)
+    print(f"wrote {len(items)} items to {args.out / 'train_items.pt'}")
+    print(f"test set: {args.test}")
 
 
 if __name__ == "__main__":

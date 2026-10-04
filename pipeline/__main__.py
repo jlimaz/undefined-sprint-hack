@@ -16,7 +16,7 @@ def main():
     started = time.perf_counter()
     unload()
     timings = [("ollama unload", time.perf_counter() - started)]
-    lines = (ROOT / "data" / "mock_observations_20.jsonl").read_text().splitlines()
+    lines = (ROOT / "data" / "test_observations.jsonl").read_text().splitlines()
     observations = [json.loads(line) for line in lines if line.strip()][:MAX_OBSERVATIONS]
     questions = json.loads((ROOT / "data" / "questions_20.json").read_text())
     started = time.perf_counter()
@@ -31,8 +31,8 @@ def main():
     classified = []
     correct = 0
     for observation, answer in zip(observations, answers):
-        family, confidence = answer["family"]
-        if family == observation["label_family"]:
+        mode, confidence = answer["mode"]
+        if mode == observation["label_mode"]:
             correct += 1
         classified.append(
             {
@@ -40,21 +40,21 @@ def main():
                 "center_frequency_hz": observation["center_frequency_hz"],
                 "bandwidth_hz": observation["bandwidth_hz"],
                 "modulation": observation["modulation"],
-                "family": family,
+                "mode": mode,
                 "confidence": confidence,
             }
         )
     started = time.perf_counter()
-    judgment = judge(classified, list(questions["family"]["criteria"]), question)
+    judgment = judge(classified, list(questions["mode"]["criteria"]), question)
     timings.append(("ollama judge", time.perf_counter() - started))
-    jamming = sum(observation["label_family"] == "jamming" for observation in observations)
+    morse = sum(observation["label_mode"] == "morse" for observation in observations)
     for item in classified:
         print(json.dumps(item))
     print(f"\033[32m{json.dumps({'judgment': judgment})}\033[0m")
     print(
         f"laya {correct}/{len(observations)} "
-        f"expected jamming: {jamming} "
-        f"expected not jamming: {len(observations) - jamming}"
+        f"expected morse: {morse} "
+        f"expected not morse: {len(observations) - morse}"
     )
     for step, seconds in timings:
         print(f"{step}: {seconds:.2f}s", file=sys.stderr)
