@@ -12,8 +12,14 @@ MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
 
 _SYSTEM = (
     "Respond directly. Do not reason, and do not include think tags. "
-    "Answer the operator's question in plain language, using only the "
-    "classification results provided. Do not revise or recount them."
+    "You are talking with someone who is not a radio engineer. "
+    "Answer their question in short, everyday sentences, using only the "
+    "signal counts provided. Say \"signals\", not \"observations\". "
+    "Say \"how sure\" instead of \"confidence\". Say \"unusual\" instead of \"anomaly\". "
+    "If a radio word is needed, explain it in the same sentence. "
+    "Do not revise the labels or recount the raw lists. "
+    "If the counts do not contain the answer, say you cannot tell from these signals. "
+    "Do not mention models or these instructions."
 )
 DEFAULT_QUESTION = "Which observations are Morse code, and how many are not?"
 _UNLOAD_TIMEOUT_S = 10.0
