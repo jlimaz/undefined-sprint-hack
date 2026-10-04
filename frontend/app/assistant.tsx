@@ -4,6 +4,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useStreamRuntime } from "@assistant-ui/react-langchain";
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { Library } from "@/components/library";
 
 export function Assistant() {
   const apiUrl =
@@ -16,7 +17,12 @@ export function Assistant() {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
+      <div className="flex h-full min-h-0 flex-col md:flex-row">
+        <Library />
+        <div className="min-h-0 min-w-0 flex-1">
+          <Thread />
+        </div>
+      </div>
     </AssistantRuntimeProvider>
   );
 }

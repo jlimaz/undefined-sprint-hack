@@ -25,6 +25,7 @@ import {
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import eagleIcon from "@/app/eagle_icon.png";
 import { cn } from "@/lib/utils";
 import {
   ActionBarPrimitive,
@@ -192,7 +193,6 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
       }}
     >
       <ThreadPrimitive.Viewport
-        turnAnchor="top"
         data-slot="aui_thread-viewport"
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
       >
@@ -211,7 +211,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
 
           <div
             data-slot="aui_message-group"
-            className="mb-14 flex flex-col gap-y-6 empty:hidden"
+            className="mb-14 flex flex-col gap-y-6 pt-2 empty:hidden"
           >
             <ThreadPrimitive.Messages>
               {() => <ThreadMessage />}
@@ -356,6 +356,13 @@ const ThreadScrollToBottom: FC = () => {
 const ThreadWelcome: FC = () => {
   return (
     <div className="aui-thread-welcome-root mb-6 flex flex-col px-2">
+      <img
+        src={eagleIcon.src}
+        alt=""
+        width={Math.round(eagleIcon.width * 0.75)}
+        height={Math.round(eagleIcon.height * 0.75)}
+        className="fade-in slide-in-from-bottom-1 animate-in fill-mode-both mb-4 h-12 w-auto self-start duration-200"
+      />
       <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-2xl font-medium tracking-tight duration-200">
         How can I help you today?
       </p>
