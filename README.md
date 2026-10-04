@@ -12,7 +12,7 @@ Laya is asked which of eight shortwave signal types an observation is, or `other
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-ollama pull qwen3:4b-instruct
+ollama pull qwen2.5:14b
 ```
 
 Ollama must be running. The pipeline also needs the fine-tuned Laya checkpoint in `models/laya-rf-modes` (about 800 MB, not committed): train it with [finetune/README.md](finetune/README.md), or copy the folder from the machine that did.
@@ -43,9 +43,10 @@ python -m uvicorn pipeline.server:app --host 127.0.0.1 --port 8000
 
 | Request | What it does |
 |---|---|
-| `POST /classify` | Takes `{"knowledge": {"name", "text"}, "data": {"name", "text"}}`, runs Laya, and makes the result the current one. |
+| `POST /classify` | Takes `{"knowledge": {"name", "text"}, "data": {"name", "text"}}`, runs Laya on the first 100 rows, and makes the result the current one. |
+| `POST /reclassify` | Takes `{"count"?, "remaining"?}` and runs Laya again on the files from the last `/classify`. `remaining` starts after the current result; a `count` is how many rows, from the start unless `remaining` is set. |
 | `GET /context` | The current result as the text the chat model answers from, and whether a run is in progress. |
-| `DELETE /context` | Forgets the current result. |
+| `DELETE /context` | Forgets the current result and the stored files. |
 
 The knowledge file has the shape of `data/questions_20.json`. The data file is a JSON list of observations, or one observation per line as in `data/test_observations.jsonl`; each needs `center_frequency_hz`, `bandwidth_hz` and `modulation`, and `id` defaults to the row number. A file that does not fit is refused with a message naming the file, and the row or question at fault.
 
@@ -68,7 +69,7 @@ The Ollama model is given the count and observation ids per signal type, and not
 | Setting | Where | Default |
 |---|---|---|
 | Laya checkpoint | `LAYA_CHECKPOINT` environment variable (a Hugging Face id or a local folder) | `models/laya-rf-modes` in this repository |
-| Ollama model | `OLLAMA_MODEL` environment variable | `qwen3:4b-instruct` |
+| Ollama model | `OLLAMA_MODEL` environment variable | `qwen2.5:14b` |
 | Ollama address | `OLLAMA_HOST` environment variable | `http://127.0.0.1:11434` |
 | Observations per run | `MAX_OBSERVATIONS` in `pipeline/inputs.py` | 100 |
 

@@ -80,8 +80,17 @@ def test_context_does_not_claim_a_cap_it_did_not_apply():
 
 
 def test_context_notes_truncation_only_when_rows_were_dropped():
-    assert "first 4 of 774" in build_context(NAMES, QUESTIONS, ROWS, total=774)
+    context = build_context(NAMES, QUESTIONS, ROWS, total=774)
+    assert "first 4 of 774" in context
+    assert "770 rows have not been classified." in context
     assert "first 4 of" not in build_context(NAMES, QUESTIONS, ROWS, total=4)
+
+
+def test_context_describes_a_later_window():
+    context = build_context(NAMES, QUESTIONS, ROWS, total=774, offset=100)
+    assert "rows 101\u2013104 of 774" in context
+    assert "Rows 1\u2013100 are not part of this result." in context
+    assert "670 rows after this result have not been classified." in context
 
 
 def test_summary():
@@ -91,6 +100,7 @@ def test_summary():
         "data_name": "observations.json",
         "observations": 4,
         "total_rows": 774,
+        "row_offset": 0,
         "questions": [
             {
                 "name": "mode",

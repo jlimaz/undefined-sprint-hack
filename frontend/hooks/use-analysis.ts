@@ -9,6 +9,8 @@ export type AnalysisSummary = {
   data_name: string;
   observations: number;
   total_rows: number;
+  /** Index of the first classified row. Zero means the run started at the first row. */
+  row_offset: number;
   questions: {
     name: string;
     instructions: string;
@@ -26,12 +28,26 @@ type AnalysisState = {
   /** The classification the chat currently answers from, if any. */
   summary: AnalysisSummary | null;
   error: AnalysisError | null;
-  run: (knowledge: File, data: File) => Promise<boolean>;
+  run: (knowledge: File[], data: File[]) => Promise<boolean>;
   clear: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Read the pipeline once, without scheduling another read. */
+  sync: () => Promise<void>;
 };
 
-const POLL_MS = 2000;
+export const ANALYSIS_POLL_MS = 2000;
+
+async function pullAnalysis(set: (partial: Partial<AnalysisState>) => void): Promise<boolean> {
+  const res = await fetch("/api/pipeline/context").catch(() => null);
+  if (!res?.ok) return false;
+  const payload = await res.json().catch(() => null);
+  if (!payload) return false;
+  set({
+    running: payload.running === true,
+    summary: payload.active ? payload.summary : null,
+  });
+  return payload.running === true;
+}
 
 /** Shared by the Library, which starts a run, and the thread, which reflects it. */
 export const useAnalysis = create<AnalysisState>((set, get) => ({
@@ -42,13 +58,14 @@ export const useAnalysis = create<AnalysisState>((set, get) => ({
   run: async (knowledge, data) => {
     if (get().running) return false;
     set({ running: true, error: null });
+    const upload = async (file: File) => ({ name: file.name, text: await file.text() });
     try {
       const res = await fetch("/api/pipeline/classify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          knowledge: { name: knowledge.name, text: await knowledge.text() },
-          data: { name: data.name, text: await data.text() },
+          knowledge: await Promise.all(knowledge.map(upload)),
+          data: await Promise.all(data.map(upload)),
         }),
       });
       const payload = await res.json().catch(() => null);
@@ -80,14 +97,10 @@ export const useAnalysis = create<AnalysisState>((set, get) => ({
 
   // Picks up a classification that outlived a page reload, or is still going.
   refresh: async () => {
-    const res = await fetch("/api/pipeline/context").catch(() => null);
-    if (!res?.ok) return;
-    const payload = await res.json().catch(() => null);
-    if (!payload) return;
-    set({
-      running: payload.running === true,
-      summary: payload.active ? payload.summary : null,
-    });
-    if (payload.running) setTimeout(() => void get().refresh(), POLL_MS);
+    if (await pullAnalysis(set)) setTimeout(() => void get().refresh(), ANALYSIS_POLL_MS);
+  },
+
+  sync: async () => {
+    await pullAnalysis(set);
   },
 }));

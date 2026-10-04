@@ -18,7 +18,7 @@ This is the [assistant-ui](https://github.com/assistant-ui/assistant-ui) starter
    ```
 
    Required:
-   - Ollama running locally (`ollama serve`), with the model from `OLLAMA_MODEL` already pulled. Defaults to `qwen3:4b-instruct` at `http://127.0.0.1:11434`. Use the same model the pipeline loads: it keeps that one in GPU memory, and a small GPU cannot hold a second.
+   - Ollama running locally (`ollama serve`), with the model from `OLLAMA_MODEL` already pulled. Defaults to `qwen2.5:14b` at `http://127.0.0.1:11434`. Use the same model the pipeline loads: it keeps that one in GPU memory, and a small GPU cannot hold a second.
 
    Optional:
    - `OLLAMA_HOST` / `OLLAMA_MODEL` — override the local server or model id
@@ -45,7 +45,7 @@ This is the [assistant-ui](https://github.com/assistant-ui/assistant-ui) starter
 1. In the Library, open **Knowledge** and add a Laya questions file, such as `data/questions_20.json`.
 2. Open **Data** and add observations, such as `data/test_observations.jsonl`. JSON lists and one-object-per-line files both work.
 3. Each file is checked as it is added. One that is not valid JSON, or sits in the wrong tab, says so under its name and cannot be picked.
-4. Press **Run Laya**. Chat is paused while Laya has the GPU. Only the first 100 rows of the data file are classified.
+4. Press **Run Laya**. Chat is paused while Laya has the GPU. Only the first 100 rows of the data file are classified. Asking the chat to analyze the remaining rows, or a different number, runs Laya on that slice and summarizes it.
 5. When the Library shows **Active**, ask the chat about the result. It answers from Laya's output only, and says so when the answer is not there.
 
 **Clear**, or removing a file the result came from, drops the result. It otherwise survives a page reload, until the Laya service restarts.

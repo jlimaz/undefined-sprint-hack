@@ -1,0 +1,12 @@
+{
+  "mode": {
+    "criteria": {
+      "olivia": "Olivia; amateur shortwave bands, 3.5 to 28 MHz; 150 Hz to 1 kHz wide; MFSK",
+      "dominoex": "DominoEX; amateur shortwave bands, 3.5 to 28 MHz; 60 to 200 Hz wide; MFSK",
+      "mt63": "MT63; amateur shortwave bands, 3.5 to 28 MHz; 850 Hz to 1 kHz wide; PSK",
+      "navtex": "NAVTEX marine broadcast; 490 kHz, 518 kHz or 4.21 MHz; 200 to 300 Hz wide; FSK",
+      "weather_fax": "weather fax; fixed shortwave channels, 2 to 23 MHz; up to 1.1 kHz wide; FM",
+      "other": "any other signal, or not identifiable; other bands, wider signals or other modulations"
+    }
+  }
+}

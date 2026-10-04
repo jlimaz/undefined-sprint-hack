@@ -24,7 +24,7 @@ import {
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAnalysis } from "@/hooks/use-analysis";
+import { ANALYSIS_POLL_MS, useAnalysis } from "@/hooks/use-analysis";
 import eagleIcon from "@/app/eagle_icon.png";
 import { cn } from "@/lib/utils";
 import {
@@ -59,6 +59,7 @@ import {
 import {
   createContext,
   useContext,
+  useEffect,
   type ComponentType,
   type FC,
   type PropsWithChildren,
@@ -175,6 +176,21 @@ export const Thread: FC<ThreadProps> = ({
   );
 };
 
+/** While a reply is in flight, follow a classification the chat tool may have started. */
+const PipelineFollow: FC = () => {
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const sync = useAnalysis((s) => s.sync);
+
+  useEffect(() => {
+    void sync();
+    if (!isRunning) return;
+    const id = setInterval(() => void sync(), ANALYSIS_POLL_MS);
+    return () => clearInterval(id);
+  }, [isRunning, sync]);
+
+  return null;
+};
+
 const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
   isEmpty,
   autoFocus,
@@ -192,6 +208,7 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
         ["--composer-padding" as string]: "8px",
       }}
     >
+      <PipelineFollow />
       <ThreadPrimitive.Viewport
         data-slot="aui_thread-viewport"
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
