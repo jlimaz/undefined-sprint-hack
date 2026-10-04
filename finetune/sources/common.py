@@ -8,8 +8,6 @@ ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
 TRAIN = ROOT / "data" / "train"
 MOCK = ROOT / "data" / "mock_observations_20.jsonl"
-TEST = ROOT / "data" / "test_observations.jsonl"
-HELD_OUT = ROOT / "data" / "held_out_signals.json"
 
 # How an observation differs from the catalogue entry, measured on the mock file:
 # bandwidth is the listed value times roughly N(1, 0.1), and one modulation in five
@@ -30,16 +28,9 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
-def held_out_signals() -> set[str]:
-    """Signals kept for the unseen test rows, which training data must not contain."""
-    if not HELD_OUT.exists():
-        raise SystemExit(f"{HELD_OUT} is missing. Run: python -m finetune.sources.split")
-    return set(json.loads(HELD_OUT.read_text()))
-
-
-def mock_families() -> dict[str, str]:
-    """The family the mock file gives each of its signals."""
-    return {row["label_signal"]: row["label_family"] for row in read_jsonl(MOCK)}
+def test_signal_names() -> set[str]:
+    """Signals the test file uses, which training data must not contain."""
+    return {row["label_signal"] for row in read_jsonl(MOCK)}
 
 
 def observe(rng: random.Random, frequencies: list[int], bandwidths: list[int], modulations: list[str]) -> dict:

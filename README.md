@@ -4,7 +4,7 @@ A short local path: radio observations go to Laya, which assigns each one an emi
 
 ## Current state
 
-The base Laya checkpoint does not classify these observations: it scores 8.6% on the 2,000 mock observations (12 families, so chance is about 8%) and answers `amateur_radio` for almost everything. Laya has to be fine-tuned before the pipeline output means anything. A first fine-tuning run reached 18.7%; a second run on improved training data is prepared. See [finetune/README.md](finetune/README.md).
+The base Laya checkpoint does not classify these observations: it scores 8.6% on the 2,000 mock observations (12 families, so chance is about 8%) and answers `amateur_radio` for almost everything. Laya has to be fine-tuned before the pipeline output means anything. The fine-tuning setup is ready but has not been run; see [finetune/README.md](finetune/README.md).
 
 ## Setup
 
@@ -56,10 +56,9 @@ Use a non-thinking Ollama model. `qwen3:4b` (without `-instruct`) reasons at len
 
 ## Data
 
-- `data/mock_observations_20.jsonl`: 2,000 simulated observations of 175 catalogued signals. Each has a centre frequency, bandwidth, modulation, SNR and duty cycle, plus the expected `label_family` and `label_signal`. The pipeline reads its first 100.
-- `data/test_observations.jsonl`: the 788 mock observations kept for testing fine-tuned checkpoints. The rest of the mock file is used for training; see [finetune/README.md](finetune/README.md).
+- `data/mock_observations_20.jsonl`: 2,000 simulated observations of 175 catalogued signals. Each has a centre frequency, bandwidth, modulation, SNR and duty cycle, plus the expected `label_family` and `label_signal`. This is the test set.
 - `data/questions_20.json`: the question Laya answers, with one description per family.
-- `data/train/`: training observations built from open data and from the mock file, used only for fine-tuning.
+- `data/train/`: training observations built from open data, used only for fine-tuning.
 
 Laya is shown three fields of each observation, as text: centre frequency, bandwidth and modulation.
 

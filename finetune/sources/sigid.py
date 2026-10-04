@@ -1,9 +1,8 @@
 """Turn the Artemis signal catalogue (sigidwiki) into training observations.
 
 Each catalogued signal has listed frequencies, bandwidths, modulations and
-categories. Held-out signals are left out, so the unseen test rows stay a test
-of signals never seen in training. Signals the mock file shares with training
-keep the family the mock file gives them.
+categories. Signals that the test file already uses are left out, so the test
+file stays a test of signals never seen in training.
 """
 
 import argparse
@@ -11,7 +10,7 @@ import collections
 import random
 import sqlite3
 
-from finetune.sources.common import RAW, TRAIN, held_out_signals, mock_families, observe, write_jsonl
+from finetune.sources.common import RAW, TRAIN, observe, test_signal_names, write_jsonl
 
 DATABASE = RAW / "artemis" / "data.sqlite"
 OUTPUT = TRAIN / "sigid.jsonl"
@@ -99,14 +98,12 @@ def main() -> None:
     parser.add_argument("--rows-per-family", type=int, default=ROWS_PER_FAMILY)
     args = parser.parse_args()
 
-    held_out = held_out_signals()
-    known = mock_families()
+    held_out = test_signal_names()
     skipped = collections.Counter()
     by_family = collections.defaultdict(list)
     for signal in load_signals():
-        signal["family"] = known.get(signal["name"], signal["family"])
         if signal["name"] in held_out:
-            skipped["held out for the test"] += 1
+            skipped["used by the test file"] += 1
         elif signal["family"] is None:
             skipped["no family for its categories"] += 1
         elif not (signal["frequencies"] and signal["bandwidths"]):

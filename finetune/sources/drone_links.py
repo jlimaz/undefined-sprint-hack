@@ -1,6 +1,6 @@
 """Hand-curated drone control and video links, as training observations.
 
-The signal catalogue has no drone links, and the mock file's ten are not used
+The signal catalogue has no drone links, and the test file's ten are not used
 here. These entries are approximate figures from public product documentation,
 not measurements: treat this file as a stopgap until real captures replace it.
 """
@@ -8,7 +8,7 @@ not measurements: treat this file as a stopgap until real captures replace it.
 import argparse
 import random
 
-from finetune.sources.common import TRAIN, held_out_signals, observe, write_jsonl
+from finetune.sources.common import TRAIN, observe, test_signal_names, write_jsonl
 
 OUTPUT = TRAIN / "drone_links.jsonl"
 SEED = 20
@@ -50,9 +50,9 @@ def main() -> None:
     parser.add_argument("--rows", type=int, default=ROWS)
     args = parser.parse_args()
 
-    clash = set(LINKS) & held_out_signals()
+    clash = set(LINKS) & test_signal_names()
     if clash:
-        raise SystemExit(f"These links are held out for the test and must not be trained on: {clash}")
+        raise SystemExit(f"These links are in the test file and must not be trained on: {clash}")
     rng = random.Random(SEED)
     each = -(-args.rows // len(LINKS))
     rows = [

@@ -17,19 +17,14 @@ from huggingface_hub import snapshot_download
 from laya.common import QTYPES, build_sequence
 from transformers import AutoTokenizer
 
-from finetune.sources.common import ROOT, TEST, TRAIN, read_jsonl
+from finetune.sources.common import MOCK, ROOT, TRAIN, read_jsonl
 from pipeline.laya import HEAD_MAX_LEN, MAX_LEN, describe
 
 # Fine-tuning always starts from the published checkpoint.
 BASE_CHECKPOINT = "convaiinnovations/laya"
 QUESTIONS = ROOT / "data" / "questions_20.json"
 OUT = ROOT / "finetune" / "out"
-DEFAULT_TRAIN = [
-    TRAIN / "sigid.jsonl",
-    TRAIN / "panoradio_hf.jsonl",
-    TRAIN / "drone_links.jsonl",
-    TRAIN / "mock_train.jsonl",
-]
+DEFAULT_TRAIN = [TRAIN / "sigid.jsonl", TRAIN / "panoradio_hf.jsonl", TRAIN / "drone_links.jsonl"]
 STAGES = {"stage1": 2000, "stage2": 12000}
 QUESTION = "family"
 SEED = 20
@@ -87,7 +82,7 @@ def build_item(tokenizer, row: dict, question: dict, rng: random.Random) -> dict
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--train", type=Path, nargs="+", default=DEFAULT_TRAIN)
-    parser.add_argument("--test", type=Path, default=TEST)
+    parser.add_argument("--test", type=Path, default=MOCK)
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args()
@@ -95,15 +90,10 @@ def main() -> None:
     question = json.loads(args.questions.read_text())[QUESTION]
     families = list(question["criteria"])
     rows = [row for path in args.train for row in read_jsonl(path)]
-    test = read_jsonl(args.test)
-    # Test rows without a split tag count as unseen, the stricter reading.
-    unseen = {row["label_signal"] for row in test if row.get("split", "unseen") == "unseen"}
+    unseen = {row["label_signal"] for row in read_jsonl(args.test)}
     leaked = {row["label_signal"] for row in rows} & unseen
     if leaked:
-        raise SystemExit(f"{len(leaked)} unseen test signals are in the training data, e.g. {sorted(leaked)[:3]}")
-    reused = {row["mock_id"] for row in rows if "mock_id" in row} & {row["id"] for row in test if "split" in row}
-    if reused:
-        raise SystemExit(f"{len(reused)} test rows are also training rows. Run: python -m finetune.sources.split")
+        raise SystemExit(f"{len(leaked)} test signals are in the training data, e.g. {sorted(leaked)[:3]}")
 
     rng = random.Random(SEED)
     by_family = {
