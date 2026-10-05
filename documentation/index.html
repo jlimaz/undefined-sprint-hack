@@ -1,0 +1,243 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Argus Pitch Deck</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;1,500;1,600&display=swap">
+<style>
+/* Layout: one idea per slide, left-aligned column, hairline lists and flat cards, single blue accent. */
+:root{--bg:#f6f5f1;--fg:#111114;--mut:#6d6b66;--line:#dedcd5;--card:rgba(255,255,255,.7);--a:#2b59ff;--b:#00b8d9;--glow:rgba(43,89,255,.091);--glow2:rgba(0,184,217,.084);--g1:rgba(255,255,255,.4);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0b0e;--fg:#f3f2ee;--mut:#8b8a92;--line:#25252b;--card:rgba(255,255,255,.04);--a:#6f95ff;--b:#3fd8f0;--glow:rgba(79,120,255,.14);--glow2:rgba(63,216,240,.084);--g1:rgba(255,255,255,.045);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0b0e;--fg:#f3f2ee;--mut:#8b8a92;--line:#25252b;--card:rgba(255,255,255,.04);--a:#6f95ff;--b:#3fd8f0;--glow:rgba(79,120,255,.14);--glow2:rgba(63,216,240,.084);--g1:rgba(255,255,255,.045);color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:Poppins,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-size:16px;overflow:hidden;position:relative}
+body:before{content:"";position:fixed;inset:0;background:radial-gradient(60vw 50vh at 85% 8%,var(--glow),transparent 70%),radial-gradient(50vw 45vh at 5% 95%,var(--glow2),transparent 70%);pointer-events:none}
+.slide{display:none;height:100%;box-sizing:border-box;padding:7vh 8vw 11vh;flex-direction:column;justify-content:safe center;max-width:1180px;margin:0 auto;position:relative;overflow-y:auto}
+.slide.on{display:flex}
+.slide>*{flex-shrink:0}
+.slide.on>*{animation:up .7s cubic-bezier(.2,.7,.2,1) both}
+.slide.on>*:nth-child(2){animation-delay:.08s}.slide.on>*:nth-child(3){animation-delay:.16s}.slide.on>*:nth-child(4){animation-delay:.24s}
+@keyframes up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.k{display:flex;align-items:center;gap:.7rem;font-size:.75rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin-bottom:1.6rem}
+.k:before{content:"";width:28px;height:1px;background:var(--a)}
+h1,h2{font-family:Poppins,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;font-weight:600;letter-spacing:-.035em;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.6rem,7.5vw,5.6rem);line-height:1.05;margin-bottom:1.6rem}
+h2{font-size:clamp(1.9rem,4.4vw,3.2rem);line-height:1.12;margin-bottom:2.2rem}
+em.g{font-style:italic;color:var(--a);padding-right:.1em}
+p{font-size:clamp(1rem,1.6vw,1.25rem);line-height:1.55;color:var(--mut);margin:0;max-width:30em}
+.wave{position:fixed;left:0;right:0;bottom:0;height:22vh;display:none;align-items:flex-end;gap:6px;padding:0 6px;pointer-events:none;-webkit-mask-image:linear-gradient(transparent,#000 70%);mask-image:linear-gradient(transparent,#000 70%)}
+.wave.on{display:flex}
+.wave i{flex:1;min-width:2px;border-radius:3px 3px 0 0;background:var(--a);opacity:.28;animation:w 4.5s ease-in-out infinite;transform-origin:bottom}
+@keyframes w{0%,100%{transform:scaleY(.55)}50%{transform:scaleY(1)}}
+.row{display:flex;gap:1rem;flex-wrap:wrap;align-items:stretch;position:relative}
+.row>*{position:relative;z-index:1}
+.card{position:relative;flex:1 1 200px;min-width:0;background:var(--g1);border:1px solid var(--line);border-radius:18px;padding:1.5rem}
+.card .n{font-weight:500;font-size:2rem;line-height:1;color:var(--a);margin-bottom:1.1rem;font-variant-numeric:tabular-nums}
+.card b{display:block;font-weight:600;font-size:1.1rem;margin-bottom:.5rem}
+.card span{font-size:.93rem;line-height:1.5;color:var(--mut)}
+.arr{align-self:center;color:var(--mut)}
+.list{list-style:none;padding:0;margin:0;max-width:44em}
+.list li{display:flex;gap:1.4rem;align-items:baseline;padding:1rem 0;border-top:1px solid var(--line);font-size:clamp(1rem,1.8vw,1.3rem)}
+.list li:last-child{border-bottom:1px solid var(--line)}
+.list em{flex:0 0 4.2rem;font-style:normal;font-size:.8rem;letter-spacing:.1em;color:var(--a);font-variant-numeric:tabular-nums}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;justify-content:space-between;align-items:center;padding:1rem 8vw calc(1rem + env(safe-area-inset-bottom,0px));font-size:.8rem;letter-spacing:.1em;color:var(--mut)}
+.nav button{width:42px;height:42px;background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:50%;cursor:pointer;font-size:1rem;font-family:inherit}
+.nav button:hover{border-color:var(--a)}
+.nav button:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.bar{position:fixed;top:0;left:0;height:2px;background:var(--a);transition:width .4s;z-index:5}
+
+/* Additions for this deck */
+.slide.video{max-width:none;padding:3vh 3vw;align-items:center}
+.slide.video video{display:block;max-width:100%;max-height:100%;min-height:0;border-radius:14px;border:1px solid var(--line);background:#000}
+.ico{margin-left:auto;align-self:center;flex:none;width:22px;height:22px;color:var(--a)}
+.card.pick{border-color:var(--a)}
+.foot{margin-top:1.4rem;max-width:none;font-size:clamp(.92rem,1.35vw,1.05rem)}
+.lead{margin-bottom:1.1rem;max-width:none}
+.tags{max-width:54em}
+.tags em{flex-basis:5.4rem}
+.tags li{padding:.85rem 0;font-size:clamp(1rem,1.6vw,1.2rem)}
+.dense h2{font-size:clamp(1.7rem,3.6vw,2.6rem);margin-bottom:1.3rem}
+.dense .k{margin-bottom:1.1rem}
+.flow{gap:.6rem}
+.dense{padding-top:5vh}
+.flow .card{flex:1 1 118px;padding:1.1rem 1.15rem;display:flex;flex-direction:column}
+.flow .card.wide{flex:2.6 1 250px}
+.flow .hd{display:flex;align-items:baseline;gap:.55rem;margin-bottom:.45rem}
+.flow .card .n{font-size:1.02rem;font-weight:500;line-height:inherit;margin:0}
+.flow .card b{font-size:1.02rem;margin:0}
+.flow .card span{font-size:.86rem;line-height:1.45}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:auto;padding-top:.8rem}
+.chips i{font-style:normal;font-size:.68rem;font-weight:500;letter-spacing:.02em;line-height:1;padding:.32rem .55rem;border:1px solid var(--line);border-radius:999px;color:var(--fg);background:var(--card);white-space:nowrap}
+.tune{margin-top:.6rem;border:1px solid var(--line);border-radius:18px;background:var(--g1);padding:1rem 1.15rem}
+.tune-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2rem .9rem;margin-bottom:.8rem}
+.tune-h b{font-weight:600;font-size:1.02rem}
+.tune-h span{font-size:.86rem;line-height:1.45;color:var(--mut)}
+.tune ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem 1.1rem}
+.tune li{min-width:0;font-size:.82rem;line-height:1.45;color:var(--mut);border-top:1px solid var(--line);padding-top:.6rem}
+.tune li em{display:block;font-style:normal;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--a);margin-bottom:.25rem}
+.card ul{list-style:none;margin:.6rem 0 0;padding:0}
+.card li{padding:.65rem 0;border-top:1px solid var(--line);font-size:.93rem;line-height:1.5;color:var(--mut)}
+.card li strong{font-weight:600;color:var(--fg)}
+.pending{margin-top:1.5rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:.4rem .9rem;font-size:clamp(.92rem,1.35vw,1.05rem);max-width:none}
+.pending strong{font-weight:600;font-size:1.5em;color:var(--a);font-variant-numeric:tabular-nums}
+.pending small{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase}
+@media (max-width:640px){
+  .slide{padding:6vh 6vw 96px}
+  .arr{display:none}
+  .card{padding:1.1rem 1.2rem}
+  .card .n{font-size:1.4rem;margin-bottom:.6rem}
+  h2{margin-bottom:1.4rem}
+  .list li{gap:1rem;padding:.8rem 0}
+  .flow{gap:.6rem}
+  .flow .card,.flow .card.wide{flex-basis:100%;padding:.8rem 1rem}
+  .chips{padding-top:.55rem}
+  .tune ol{grid-template-columns:1fr 1fr}
+  .card li{padding:.5rem 0}
+  .pending{margin-top:1.1rem}
+}
+@media (prefers-reduced-motion:reduce){.slide.on>*,.wave i{animation:none}.bar{transition:none}}
+</style>
+
+<div class="bar" id="bar"></div>
+<div class="wave on" id="w"></div>
+
+<section class="slide on">
+<div class="k">Team undefined · DIU RF Spectrum</div>
+<h1>Argus<br><em class="g">RF intelligence.</em></h1>
+<p>Air-gapped by design. A local classifier reads the signal, and a local LLM explains it.</p>
+</section>
+
+<section class="slide">
+<div class="k">The problem, in DIU’s words</div>
+<h2 style="margin-bottom:1.2rem">Raw RF is easy to capture.<br><em class="g">Insight takes deep expertise.</em></h2>
+<p class="lead">The ask: pair SDR output with LLMs or multimodal AI to</p>
+<ul class="list tags">
+<li><em>IDENTIFY</em>Characterize signal metadata: frequency, bandwidth, modulation</li>
+<li><em>EXPLAIN</em>Translate complex spectral visualizations into plain-language summaries</li>
+<li><em>FLAG</em>Flag anomalies in the ambient spectrum</li>
+<li><em>OPEN</em>Rely only on open-source, publicly documented tools and protocols</li>
+</ul>
+</section>
+
+<section class="slide">
+<div class="k">The scenario</div>
+<h2 style="margin-bottom:1.2rem">Signals everywhere. <em class="g">No one to read them.</em></h2>
+<p style="max-width:40em;margin-bottom:1.7rem">A Ukrainian on the front line, with no technical background and no experience with military equipment, needs to understand the RF around him.</p>
+<div class="row" style="max-width:940px">
+<div class="card"><b>He can capture it</b><span>A commercial SDR records the spectrum around his position.</span></div>
+<div class="card"><b>He cannot read it</b><span>Frequencies, bandwidths and modulations mean little without RF training.</span></div>
+<div class="card"><b>He needs to know</b><span>What is transmitting nearby, and whether it is a threat, in plain words.</span></div>
+</div>
+</section>
+
+<section class="slide">
+<div class="k">The solution</div>
+<h2>Two local stages. <em class="g">Zero cloud.</em></h2>
+<div class="row" style="max-width:820px">
+<div class="card"><div class="n">01</div><b>Classify</b><span>Laya, an open-source deterministic classifier, names the type of each signal.</span></div>
+<div class="arr">→</div>
+<div class="card"><div class="n">02</div><b>Explain</b><span>A local LLM answers the operator’s question in plain language.</span></div>
+</div>
+<p style="margin-top:1.8rem">Argus connects straight to the data capture: ask a question, read the answer. Nothing leaves the device.</p>
+</section>
+
+<section class="slide">
+<div class="k">Technical architecture</div>
+<h2>From signal <em class="g">to answer.</em></h2>
+<div class="row flow">
+<div class="card"><div class="hd"><div class="n">01</div><b>Ingest</b><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h3l2.5-7 4 14 3.5-10 2 3h5"/></svg></div><span>Takes the SDR capture directly: frequency, bandwidth, modulation.</span></div>
+<div class="arr">→</div>
+<div class="card"><div class="hd"><div class="n">02</div><b>Classify</b><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="5" r="1.5" stroke-width="1.2"/><circle cx="12" cy="5" r="1.5" stroke-width="1.2"/><circle cx="19" cy="5" r="1.5" stroke-width="1.2"/><circle cx="5" cy="12" r="1.5" stroke-width="1.2"/><circle cx="12" cy="12" r="1.5" stroke-width="1.2"/><circle cx="19" cy="12" r="2.6" fill="currentColor"/><circle cx="5" cy="19" r="1.5" stroke-width="1.2"/><circle cx="12" cy="19" r="1.5" stroke-width="1.2"/><circle cx="19" cy="19" r="1.5" stroke-width="1.2"/></svg></div><span>Fine-tuned Laya picks one of nine signal types, with a confidence score.</span><div class="chips"><i>Laya</i><i>PyTorch</i></div></div>
+<div class="arr">→</div>
+<div class="card"><div class="hd"><div class="n">03</div><b>Explain</b><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4.5 3.5V16H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M7.5 9.5h9M7.5 12.5h6"/></svg></div><span>DeepSeek-R1 with 14B parameters answers in plain language.</span><div class="chips"><i>Ollama</i></div></div>
+<div class="arr">→</div>
+<div class="card wide"><div class="hd"><div class="n">04</div><b>Present</b><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M12 9h6M12 13h4"/></svg></div><span>The Argus dashboard streams each answer into a chat through a LangGraph agent. Beside it sits a library of captures with search and type filters.</span><div class="chips"><i>Next.js</i></div></div>
+</div>
+</section>
+
+<section class="slide">
+<div class="k">Why Laya</div>
+<h2 style="margin-bottom:1.6rem">The expertise is <em class="g">text, not code.</em></h2>
+<div class="row">
+<div class="card"><b>Conditional logic</b><ul>
+<li>Thresholds collide where signal types overlap in bandwidth.</li>
+<li>Every new signal type means new code.</li>
+<li>No confidence, so nothing to flag.</li>
+</ul></div>
+<div class="card"><b>Classic ML classifier</b><ul>
+<li>Labels are frozen at training time.</li>
+<li>A new question means a new model.</li>
+<li>Nearest-neighbour reference: <strong>82.7%</strong>.</li>
+</ul></div>
+<div class="card pick"><b>Laya</b><ul>
+<li>Reads the question and its answers as text, at request time.</li>
+<li>An RF expert edits a JSON file, not the code.</li>
+<li>Calibrated confidence, and no text to hallucinate.</li>
+<li>Fine-tuned: <strong>91.6%</strong>.</li>
+</ul></div>
+</div>
+<p class="foot">Laya is an open-source 421M-parameter encoder: one forward pass, deterministic, Apache-2.0. Accuracy is on 774 held-out rows.</p>
+</section>
+
+<section class="slide dense">
+<div class="k">Fine-tuning</div>
+<h2>How Laya <em class="g">learned RF.</em></h2>
+<p style="max-width:44em;margin-bottom:1.4rem">A first attempt, 12 emitter families on simulated data, stalled at 21%. We rebuilt the task around real recordings.</p>
+<div class="row flow">
+<div class="card"><div class="hd"><div class="n">01</div><b>Data</b></div><span>Panoradio HF recordings for eight shortwave signal types, plus the sigidwiki catalogue for “other”.</span></div>
+<div class="arr">→</div>
+<div class="card"><div class="hd"><div class="n">02</div><b>Task</b></div><span>One question with nine answers. Each observation is written as a sentence Laya can read.</span></div>
+<div class="arr">→</div>
+<div class="card"><div class="hd"><div class="n">03</div><b>Train</b></div><span>Laya’s official script on the base checkpoint: about 12,000 items in about 8 hours.</span></div>
+<div class="arr">→</div>
+<div class="card"><div class="hd"><div class="n">04</div><b>Test</b></div><span>774 rows held out. “Other” is tested on 29 signal types never seen in training.</span></div>
+</div>
+<p class="pending">Accuracy on the held-out rows <strong>91.6%</strong> <small>Nearest-neighbour reference 82.7%</small></p>
+</section>
+
+<section class="slide video">
+<video id="demo" src="demo.mp4" controls playsinline preload="auto" aria-label="Recorded demo of Argus"></video>
+</section>
+
+<section class="slide">
+<div class="k">Limits and potential</div>
+<h2>Limits today. <em class="g">Room to grow.</em></h2>
+<div class="row" style="max-width:920px">
+<div class="card"><b>Limits</b><ul>
+<li><strong>Data.</strong> Little field-specific RF data to train on.</li>
+<li><strong>Time.</strong> One sprint for fine-tuning and integration.</li>
+<li><strong>Hardware.</strong> Small GPUs slow training and inference.</li>
+</ul></div>
+<div class="card"><b>Potential</b><ul>
+<li><strong>Field data.</strong> More domain data to fine-tune Laya.</li>
+<li><strong>Hardware.</strong> Better machines for the inference models.</li>
+<li><strong>Personalization.</strong> Easy to adapt: signal types and questions are plain text.</li>
+</ul></div>
+</div>
+</section>
+
+<section class="slide">
+<div class="k">Q&amp;A</div>
+<h1><em class="g">Questions?</em></h1>
+<p>Argus, by undefined team.</p>
+</section>
+
+<script>
+var w=document.getElementById('w');
+function build(){w.innerHTML='';var n=Math.max(24,Math.round(innerWidth/16));
+for(var j=0;j<n;j++){var b=document.createElement('i');var h=30+Math.abs(Math.sin(j*.35))*45+Math.abs(Math.sin(j*.9))*18+Math.random()*10;b.style.height=h+'%';b.style.animationDelay=(j*-.2)+'s';w.appendChild(b)}}
+build();addEventListener('resize',build);
+var s=[].slice.call(document.querySelectorAll('.slide')),i=0;
+var demo=document.getElementById('demo');
+function go(d){i=Math.max(0,Math.min(s.length-1,i+d));if(demo&&!s[i].contains(demo))demo.pause();s.forEach(function(e,k){e.classList.toggle('on',k===i)});
+w.classList.toggle('on',i===0);
+document.getElementById('bar').style.width=((i+1)/s.length*100)+'%'}
+document.addEventListener('keydown',function(e){
+var onButton=e.target&&e.target.tagName==='BUTTON';
+if(e.key===' '&&demo&&s[i].contains(demo)){e.preventDefault();if(demo.paused){var pr=demo.play();if(pr&&pr.catch)pr.catch(function(){})}else demo.pause();return}
+if(e.key==='ArrowRight'||e.key==='PageDown'||(e.key===' '&&!onButton)){e.preventDefault();go(1)}
+if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(-1)}});
+var x=0;document.addEventListener('touchstart',function(e){x=e.touches[0].clientX});
+document.addEventListener('touchend',function(e){var d=e.changedTouches[0].clientX-x;if(Math.abs(d)>50)go(d<0?1:-1)});
+go(0);
+</script>
+
+</body></html>
